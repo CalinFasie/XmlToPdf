@@ -1,0 +1,12 @@
+# Mediul virtual Python
+.venv/
+
+# Fișiere generate de Python
+__pycache__/
+*.pyc
+
+# Fișiere cu informații secrete
+.env
+
+# PDF-uri generate de aplicație
+*.pdf
