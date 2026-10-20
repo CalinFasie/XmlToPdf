@@ -55,7 +55,6 @@
                 {% endfor %}
                 {% if line.item.sellers_item_identification %}{{ ui.field('Cod articol furnizor', line.item.sellers_item_identification.id) }}{% endif %}
                 {% if line.item.standard_item_identification %}{{ ui.field('Cod standard articol', line.item.standard_item_identification.id) }}{% endif %}
-                {% for category in line.item.classified_tax_categories %}{{ ui.tax_category(category, 'Categorie TVA linie') }}{% endfor %}
                 {% for total in line.tax_totals %}{{ ui.tax_total(total, 'TVA linie ' ~ loop.index) }}{% endfor %}
               </td>
               <td>{{ ui.quantity('Cantitate facturată', line.invoiced_quantity) }}</td>
@@ -67,12 +66,7 @@
               </td>
               <td>{{ ui.amount('Valoare netă', line.line_extension_amount) }}</td>
               <td>
-                {% for category in line.item.classified_tax_categories %}
-                  <div class="data-grid">
-                    {{ ui.field('Categorie', category.id) }}
-                    {{ ui.field('Procent TVA', category.percent) }}
-                  </div>
-                {% endfor %}
+                {% for category in line.item.classified_tax_categories %}{{ ui.tax_category(category, 'Categorie TVA linie') }}{% endfor %}
               </td>
             </tr>
           {% endfor %}
@@ -136,15 +130,15 @@
       <h3 id="delivery-heading">Livrare</h3>
       <div class="summary-list">
         {% for delivery in invoice.deliveries %}
-          <section class="summary-card">
+          <section class="summary-card delivery-card">
             <h4>Livrare {{ loop.index }}</h4>
             <div class="data-grid">
               {{ ui.field('Data livrării', delivery.actual_delivery_date) }}
               {{ ui.field('Ora livrării', delivery.actual_delivery_time) }}
             </div>
-            {% if delivery.delivery_party %}{{ ui.party_block('Destinatar', delivery.delivery_party) }}{% endif %}
+            {% if delivery.delivery_party %}{{ ui.party_block('Destinatar', delivery.delivery_party, 'party-card delivery-party') }}{% endif %}
             {% if delivery.delivery_location %}
-              <section class="subcard">
+              <section class="subcard delivery-location">
                 <h4>Locul livrării</h4>
                 <div class="data-grid">
                   {{ ui.field('Identificator locație', delivery.delivery_location.id) }}

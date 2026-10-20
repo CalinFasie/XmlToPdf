@@ -409,6 +409,7 @@ button:disabled {
 }
 
 @media print {
+  :root,
   html,
   body {
     width: auto;
@@ -416,11 +417,12 @@ button:disabled {
     margin: 0;
     padding: 0;
     color: #000;
-    background: #fff;
+    background: #fff !important;
     font-family: Arial, sans-serif;
-    font-size: 8pt;
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
+    font-size: 9pt;
+    line-height: 1.25;
+    print-color-adjust: economy;
+    -webkit-print-color-adjust: economy;
   }
 
   .app-header,
@@ -435,6 +437,7 @@ button:disabled {
     width: 100%;
     margin: 0;
     padding: 0;
+    background-color: #fff !important;
   }
 
   .invoice {
@@ -443,40 +446,45 @@ button:disabled {
     padding: 0;
     border: 0;
     border-radius: 0;
-    background: #fff;
+    background: #fff !important;
     box-shadow: none;
   }
 
+  .invoice,
+  .invoice * {
+    background-color: #fff !important;
+  }
+
   .invoice-heading {
-    gap: 8mm;
-    padding-bottom: 4mm;
+    gap: 5mm;
+    padding-bottom: 2mm;
   }
 
   .invoice-heading h2 {
     color: #000;
-    font-size: 18pt;
+    font-size: 16pt;
   }
 
   .invoice-meta {
     min-width: 0;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 2mm 4mm;
+    gap: 1.5mm 3mm;
   }
 
   .parties-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 3mm;
-    margin: 4mm 0 5mm;
+    gap: 2mm;
+    margin: 2.5mm 0 2mm;
   }
 
   .party-card,
   .subcard,
   .summary-card {
     min-width: 0;
-    padding: 3mm;
-    border: 1px solid #aab3bb;
+    padding: 1.6mm;
+    border: 0.6pt solid #aab3bb;
     border-radius: 0;
-    background: #fff;
+    background: #fff !important;
     box-shadow: none;
   }
 
@@ -488,30 +496,37 @@ button:disabled {
   }
 
   .data-grid {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 45mm), 1fr));
-    gap: 2mm 3mm;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 38mm), 1fr));
+    gap: 1mm 2mm;
   }
 
   .datum-label,
   .datum-attributes {
     color: #333;
-    font-size: 7pt;
+    font-size: 7.8pt;
   }
 
   .datum-value {
     color: #000;
+    line-height: 1.2;
     overflow-wrap: anywhere;
   }
 
+  .party-name {
+    margin-bottom: 1mm;
+    color: #000;
+    font-size: 9.5pt;
+  }
+
   .invoice-section {
-    margin-top: 5mm;
+    margin-top: 3mm;
     break-inside: auto;
     page-break-inside: auto;
   }
 
   .invoice-section > h3 {
-    margin-bottom: 2mm;
-    padding-bottom: 1mm;
+    margin-bottom: 1.5mm;
+    padding-bottom: 0.7mm;
     font-size: 10pt;
   }
 
@@ -553,9 +568,9 @@ button:disabled {
 
   .invoice-lines th,
   .invoice-lines td {
-    padding: 1.5mm;
+    padding: 1mm;
     color: #000;
-    font-size: 7pt;
+    font-size: 8.5pt;
     white-space: normal;
     overflow-wrap: anywhere;
     border-color: #aab3bb;
@@ -570,27 +585,43 @@ button:disabled {
 
   .invoice-lines th:nth-child(2),
   .invoice-lines td:nth-child(2) {
-    width: 42%;
+    width: 36%;
   }
 
   .invoice-lines th:nth-child(3),
   .invoice-lines td:nth-child(3) {
-    width: 12%;
+    width: 10%;
   }
 
   .invoice-lines th:nth-child(4),
   .invoice-lines td:nth-child(4) {
-    width: 15%;
+    width: 14%;
   }
 
   .invoice-lines th:nth-child(5),
   .invoice-lines td:nth-child(5) {
-    width: 15%;
+    width: 18%;
   }
 
   .invoice-lines th:nth-child(6),
   .invoice-lines td:nth-child(6) {
-    width: 11%;
+    width: 17%;
+  }
+
+  .invoice-lines .subcard {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .invoice-lines .subcard h4 {
+    margin: 0 0 0.7mm;
+    font-size: 8.2pt;
+  }
+
+  .invoice-lines .subcard .data-grid {
+    grid-template-columns: 1fr;
+    gap: 0.7mm;
   }
 
   .invoice-lines td:first-child,
@@ -601,6 +632,7 @@ button:disabled {
   }
 
   .item-description {
+    margin-bottom: 1mm;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     orphans: 2;
@@ -608,7 +640,21 @@ button:disabled {
   }
 
   .subcard {
-    margin-top: 2mm;
+    margin-top: 1mm;
+    padding: 0;
+    border: 0;
+    background-color: #fff !important;
+  }
+
+  .party-card h3,
+  .subcard h4,
+  .summary-card h4 {
+    margin-bottom: 0.8mm;
+  }
+
+  .subcard h4,
+  .summary-card h4 {
+    font-size: 8.5pt;
   }
 
   .summary-list {
@@ -616,14 +662,36 @@ button:disabled {
   }
 
   .summary-card + .summary-card {
-    margin-top: 2mm;
+    margin-top: 1mm;
+  }
+
+  .summary-card {
+    padding: 1.5mm;
+    border-width: 0.6pt;
+    background-color: #fff !important;
+  }
+
+  .delivery-card,
+  .delivery-party,
+  .delivery-location,
+  .delivery-location .subcard {
+    margin-top: 0.8mm;
+    padding: 0;
+    border: 0;
+    background-color: #fff !important;
+  }
+
+  .delivery-card > h4 {
+    margin-bottom: 0.8mm;
   }
 
   .grand-total {
     border-color: #777;
-    background: #fff;
-    break-inside: avoid;
-    page-break-inside: avoid;
+    margin-top: 1mm;
+    padding: 1mm;
+    background: #fff !important;
+    break-inside: auto;
+    page-break-inside: auto;
   }
 
   .grand-total .datum-value {

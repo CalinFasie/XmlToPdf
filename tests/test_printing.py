@@ -92,8 +92,20 @@ def test_print_css_sets_a4_landscape_and_hides_web_controls() -> None:
         print_css,
         re.DOTALL,
     )
-    assert "background: #fff;" in print_css
+    assert re.search(r"background:\s*#fff\s*!important;", print_css)
     assert "box-shadow: none;" in print_css
+
+
+def test_print_css_uses_white_background_and_readable_type() -> None:
+    css = CSS_PATH.read_text(encoding="utf-8")
+    print_css = css[css.index("@media print"):]
+
+    assert re.search(r":root,\s*html,\s*body\s*\{[^}]*background:\s*#fff\s*!important", print_css)
+    assert "background-color: #fff !important;" in print_css
+    assert "font-size: 9pt;" in print_css
+    assert "font-size: 8.5pt;" in print_css
+    assert "print-color-adjust: economy;" in print_css
+    assert not re.search(r"break-inside:\s*avoid|page-break-inside:\s*avoid", print_css)
 
 
 def test_print_table_fits_and_can_continue_across_pages() -> None:

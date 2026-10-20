@@ -87,7 +87,7 @@ def test_invoice_rendering_shows_header_parties_and_distinct_identifiers(
     assert response.headers["Cache-Control"] == "no-store"
 
 
-@pytest.mark.parametrize("line_count", [1, 10, 30, 100])
+@pytest.mark.parametrize("line_count", [1, 2, 10, 30, 100])
 def test_all_invoice_lines_are_rendered_in_xml_order(
     local_client: tuple[FlaskClient, str], line_count: int
 ) -> None:
@@ -100,6 +100,17 @@ def test_all_invoice_lines_are_rendered_in_xml_order(
     assert positions == sorted(positions)
     assert html.count("<tbody>") == 1
     assert html.count("<tr>") == line_count + 1
+
+
+def test_line_tax_category_is_displayed_once_in_the_tax_column(
+    local_client: tuple[FlaskClient, str],
+) -> None:
+    client, csrf_token = local_client
+    html = _render(client, csrf_token, _invoice_with_lines(1)).get_json()["invoice_html"]
+
+    assert html.count("Categorie TVA linie") == 1
+    assert html.count("Procent TVA") == 1
+    assert "Schemă fiscală — ID" in html
 
 
 def test_absent_optional_sections_are_omitted_without_placeholder_values(
