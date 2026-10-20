@@ -322,6 +322,44 @@ button:disabled {
   margin-bottom: 0;
 }
 
+.tax-compact-category {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+
+.tax-compact-field {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tax-compact-label {
+  color: #627487;
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.tax-compact-label::after {
+  content: ":";
+}
+
+.tax-compact-value {
+  min-width: 0;
+  color: #1f3042;
+  overflow-wrap: anywhere;
+}
+
+.tax-compact-attribute {
+  margin-left: 3px;
+  color: #657689;
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
 .subcard {
   margin-top: 12px;
 }
@@ -562,8 +600,8 @@ button:disabled {
   }
 
   .invoice-lines tr {
-    break-inside: auto;
-    page-break-inside: auto;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .invoice-lines th,
@@ -624,6 +662,31 @@ button:disabled {
     gap: 0.7mm;
   }
 
+  .tax-compact-category {
+    gap: 0.4mm 1.2mm;
+    line-height: 1.15;
+  }
+
+  .tax-compact-field {
+    gap: 0.4mm;
+  }
+
+  .tax-compact-label {
+    color: #333;
+    font-size: 7.8pt;
+  }
+
+  .tax-compact-value {
+    color: #000;
+    font-size: 8.5pt;
+  }
+
+  .tax-compact-attribute {
+    margin-left: 0.5mm;
+    color: #333;
+    font-size: 7.8pt;
+  }
+
   .invoice-lines td:first-child,
   .invoice-lines td:nth-child(3),
   .invoice-lines td:nth-child(4),
@@ -661,6 +724,17 @@ button:disabled {
     display: block;
   }
 
+  .payment-list-multiple {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 1mm 2mm;
+  }
+
+  .payment-list-multiple > .summary-card + .summary-card {
+    margin-top: 0;
+  }
+
   .summary-card + .summary-card {
     margin-top: 1mm;
   }
@@ -683,6 +757,62 @@ button:disabled {
 
   .delivery-card > h4 {
     margin-bottom: 0.8mm;
+  }
+
+  .invoice-section[aria-labelledby="tax-heading"] .data-grid,
+  .invoice-section[aria-labelledby="totals-heading"] .data-grid,
+  .invoice-section[aria-labelledby="payment-heading"] .data-grid,
+  .invoice-section[aria-labelledby="delivery-heading"] .data-grid {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.7mm 2mm;
+  }
+
+  .compact-values .datum,
+  .invoice-section[aria-labelledby="payment-heading"] .datum,
+  .invoice-section[aria-labelledby="delivery-heading"] .datum {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: baseline;
+    gap: 0.8mm;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .compact-values .datum-label,
+  .invoice-section[aria-labelledby="payment-heading"] .datum-label,
+  .invoice-section[aria-labelledby="delivery-heading"] .datum-label {
+    display: inline;
+    flex: 0 0 auto;
+    margin: 0;
+    font-size: 7.8pt;
+    white-space: nowrap;
+  }
+
+  .compact-values .datum-label::after,
+  .invoice-section[aria-labelledby="payment-heading"] .datum-label::after,
+  .invoice-section[aria-labelledby="delivery-heading"] .datum-label::after {
+    content: ":";
+  }
+
+  .compact-values .datum-value,
+  .compact-values .datum-attributes,
+  .invoice-section[aria-labelledby="payment-heading"] .datum-value,
+  .invoice-section[aria-labelledby="payment-heading"] .datum-attributes,
+  .invoice-section[aria-labelledby="delivery-heading"] .datum-value,
+  .invoice-section[aria-labelledby="delivery-heading"] .datum-attributes {
+    display: inline;
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .compact-values .datum-value,
+  .invoice-section[aria-labelledby="payment-heading"] .datum-value,
+  .invoice-section[aria-labelledby="delivery-heading"] .datum-value {
+    font-size: 9pt;
+    line-height: 1.2;
   }
 
   .grand-total {

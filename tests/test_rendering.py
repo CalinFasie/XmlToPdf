@@ -106,11 +106,43 @@ def test_line_tax_category_is_displayed_once_in_the_tax_column(
     local_client: tuple[FlaskClient, str],
 ) -> None:
     client, csrf_token = local_client
-    html = _render(client, csrf_token, _invoice_with_lines(1)).get_json()["invoice_html"]
+    xml = _invoice_with_lines(1)
+    xml = re.sub(
+        rb"<cac:ClassifiedTaxCategory>.*?</cac:ClassifiedTaxCategory>",
+        b'<cac:ClassifiedTaxCategory>\n'
+        b'  <cbc:ID schemeID="SYN-CAT">S</cbc:ID>\n'
+        b"  <cbc:Name>Categorie sintetica</cbc:Name>\n"
+        b'  <cbc:Percent unitCode="SYN-PERCENT">19</cbc:Percent>\n'
+        b'  <cbc:TaxExemptionReasonCode listID="LIST-ATTR-SYN">SYN-REASON-CODE</cbc:TaxExemptionReasonCode>\n'
+        b"  <cbc:TaxExemptionReason>Motiv sintetic</cbc:TaxExemptionReason>\n"
+        b'  <cac:TaxScheme><cbc:ID schemeID="SYN-SCHEME">VAT-SYN</cbc:ID>'
+        b"<cbc:Name>Schema fiscala sintetica</cbc:Name>"
+        b'<cbc:TaxTypeCode schemeID="SYN-TYPE">VAT-TYPE-SYN</cbc:TaxTypeCode></cac:TaxScheme>\n'
+        b"</cac:ClassifiedTaxCategory>",
+        xml,
+        count=1,
+        flags=re.DOTALL,
+    )
+    html = _render(client, csrf_token, xml).get_json()["invoice_html"]
 
-    assert html.count("Categorie TVA linie") == 1
-    assert html.count("Procent TVA") == 1
-    assert "Schemă fiscală — ID" in html
+    assert html.count('aria-label="Categorie TVA linie"') == 1
+    for value in (
+        "SYN-CAT",
+        "Categorie sintetica",
+        "19",
+        "SYN-PERCENT",
+        "SYN-REASON-CODE",
+        "Motiv sintetic",
+        "LIST-ATTR-SYN",
+        "VAT-SYN",
+        "SYN-SCHEME",
+        "Schema fiscala sintetica",
+        "VAT-TYPE-SYN",
+        "SYN-TYPE",
+    ):
+        assert html.count(value) == 1
+    assert "tax-compact-category" in html
+    assert "Cod categorie" not in html
 
 
 def test_absent_optional_sections_are_omitted_without_placeholder_values(
@@ -196,11 +228,17 @@ def test_repeated_tax_subtotals_totals_payment_means_and_delivery_are_rendered(
     assert "TVA în moneda tranzacției" in html
     assert "Interval de tier" in html
     assert "12.00" in html
+    assert re.search(r'class="datum-value">\s*8\.5000\s*<span class="unit">RON</span>', html)
     assert "De plată" in html
     assert html.count("Mijloc de plată ") == 2
     assert "RO00SYNTHETIC0000000001" in html
     assert "BANK-SYN" in html
     assert "REF-SYN-1" in html and "REF-SYN-2" in html
+    assert "payment-list-multiple" in html
+    assert 'class="data-grid compact-values total-values"' in html
+    assert 'class="data-grid compact-values tax-total-values"' in html
+    assert 'class="data-grid compact-values tax-subtotal-values"' in html
+    assert 'class="grand-total compact-values"' in html
     assert "Destinatar sintetic" in html
     assert "Depozit sintetic" in html
     assert "Brașov" in html

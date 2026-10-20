@@ -66,7 +66,7 @@
               </td>
               <td>{{ ui.amount('Valoare netă', line.line_extension_amount) }}</td>
               <td>
-                {% for category in line.item.classified_tax_categories %}{{ ui.tax_category(category, 'Categorie TVA linie') }}{% endfor %}
+                {% for category in line.item.classified_tax_categories %}{{ ui.tax_category_compact(category) }}{% endfor %}
               </td>
             </tr>
           {% endfor %}
@@ -88,7 +88,7 @@
     <section class="invoice-section" aria-labelledby="totals-heading">
       <h3 id="totals-heading">Totaluri</h3>
       <div class="summary-card">
-        <div class="data-grid">
+        <div class="data-grid compact-values total-values">
           {{ ui.amount('Valoare netă linii', invoice.legal_monetary_total.line_extension_amount) }}
           {{ ui.amount('Total fără TVA', invoice.legal_monetary_total.tax_exclusive_amount) }}
           {{ ui.amount('Total cu TVA', invoice.legal_monetary_total.tax_inclusive_amount) }}
@@ -97,7 +97,7 @@
           {{ ui.amount('Plătit în avans', invoice.legal_monetary_total.prepaid_amount) }}
           {{ ui.amount('Rotunjire la plată', invoice.legal_monetary_total.payable_rounding_amount) }}
         </div>
-        <div class="grand-total">{{ ui.amount('De plată', invoice.legal_monetary_total.payable_amount) }}</div>
+        <div class="grand-total compact-values">{{ ui.amount('De plată', invoice.legal_monetary_total.payable_amount) }}</div>
       </div>
     </section>
   {% endif %}
@@ -105,11 +105,11 @@
   {% if invoice.payment_means %}
     <section class="invoice-section" aria-labelledby="payment-heading">
       <h3 id="payment-heading">Plată</h3>
-      <div class="summary-list">
+      <div class="summary-list payment-list{% if invoice.payment_means|length > 1 %} payment-list-multiple{% endif %}">
         {% for payment in invoice.payment_means %}
           <section class="summary-card">
             <h4>Mijloc de plată {{ loop.index }}</h4>
-            <div class="data-grid">
+            <div class="data-grid compact-values">
               {{ ui.field('Cod mijloc de plată', payment.payment_means_code) }}
               {{ ui.field('Data scadenței plății', payment.payment_due_date) }}
               {{ ui.field('Canal de plată', payment.payment_channel_code) }}
@@ -132,7 +132,7 @@
         {% for delivery in invoice.deliveries %}
           <section class="summary-card delivery-card">
             <h4>Livrare {{ loop.index }}</h4>
-            <div class="data-grid">
+            <div class="data-grid compact-values">
               {{ ui.field('Data livrării', delivery.actual_delivery_date) }}
               {{ ui.field('Ora livrării', delivery.actual_delivery_time) }}
             </div>

@@ -133,17 +133,46 @@
   {% endif %}
 {%- endmacro %}
 
+{% macro compact_field(label, item) -%}
+  {% if item is not none and (item.value is not none or item.attributes) %}
+    <span class="tax-compact-field">
+      <span class="tax-compact-label">{{ label }}</span>
+      <span class="tax-compact-value">
+        {% if item.value is not none %}{{ item.value }}{% endif %}
+        {% for attribute in item.attributes %}<span class="tax-compact-attribute">{{ attribute.name }}={{ attribute.value }}</span>{% endfor %}
+      </span>
+    </span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro tax_category_compact(category) -%}
+  {% if category is not none %}
+    <div class="tax-compact-category" aria-label="Categorie TVA linie">
+      {{ compact_field('Cod', category.id) }}
+      {{ compact_field('Denumire', category.name) }}
+      {{ compact_field('% TVA', category.percent) }}
+      {{ compact_field('Cod scutire', category.tax_exemption_reason_code) }}
+      {% for reason in category.tax_exemption_reasons %}{{ compact_field('Motiv', reason) }}{% endfor %}
+      {% if category.tax_scheme %}
+        {{ compact_field('Schemă ID', category.tax_scheme.id) }}
+        {{ compact_field('Schemă', category.tax_scheme.name) }}
+        {{ compact_field('Tip taxă', category.tax_scheme.tax_type_code) }}
+      {% endif %}
+    </div>
+  {% endif %}
+{%- endmacro %}
+
 {% macro tax_total(total, heading='Total TVA') -%}
   <section class="summary-card">
     <h4>{{ heading }}</h4>
-    <div class="data-grid">
+    <div class="data-grid compact-values tax-total-values">
       {{ amount('Valoare TVA', total.tax_amount) }}
       {{ amount('Rotunjire TVA', total.rounding_amount) }}
     </div>
     {% for subtotal in total.subtotals %}
       <section class="subcard">
         <h4>Subtotal TVA {{ loop.index }}</h4>
-        <div class="data-grid">
+        <div class="data-grid compact-values tax-subtotal-values">
           {{ amount('Bază impozabilă', subtotal.taxable_amount) }}
           {{ amount('Valoare TVA', subtotal.tax_amount) }}
           {{ field('Ordine calcul', subtotal.calculation_sequence_numeric) }}
