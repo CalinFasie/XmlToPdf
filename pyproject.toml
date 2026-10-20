@@ -22,7 +22,7 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-xmltopdf = ["templates/*.html"]
+xmltopdf = ["templates/*.html", "static/css/*.css"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

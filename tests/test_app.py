@@ -58,11 +58,13 @@ def test_homepage_offers_raw_xml_upload_and_no_store(local_client: tuple[FlaskCl
     assert response.status_code == 200
     assert response.mimetype == "text/html"
     assert b"<title>XmlToPdf</title>" in response.data
-    assert "Fundația aplicației web locale este pornită.".encode() in response.data
+    assert "Vizualizează o factură".encode() in response.data
     assert b'type="file"' in response.data
     assert b"required" in response.data
     assert b"body: file" in response.data
     assert b"FormData" not in response.data
+    assert b"invoiceContainer.innerHTML = result.invoice_html;" in response.data
+    assert b"invoiceContainer.replaceChildren();" in response.data
     assert response.headers["Cache-Control"] == "no-store"
 
 
@@ -75,7 +77,7 @@ def test_session_cookie_uses_http_only_and_strict_same_site() -> None:
     assert "SameSite=Strict" in cookie_header
 
 
-def test_valid_synthetic_xml_is_passed_to_existing_parser_and_returns_generic_message(
+def test_valid_synthetic_xml_is_passed_to_existing_parser_and_rendered(
     local_client: tuple[FlaskClient, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     client, csrf_token = local_client
@@ -90,9 +92,12 @@ def test_valid_synthetic_xml_is_passed_to_existing_parser_and_returns_generic_me
     response = post_xml(client, csrf_token, SYNTHETIC_XML)
 
     assert response.status_code == 200
-    assert response.get_json() == {"ok": True, "message": "Documentul XML a fost acceptat."}
+    result = response.get_json()
+    assert result["ok"] is True
+    assert result["message"] == "Factura a fost încărcată."
+    assert "invoice_html" in result
+    assert "SYN-INV-001" in result["invoice_html"]
     assert parsed_inputs == [SYNTHETIC_XML]
-    assert b"SYN-INV-001" not in response.data
     assert response.headers["Cache-Control"] == "no-store"
 
 
@@ -161,7 +166,7 @@ def test_body_without_content_length_is_read_when_wsgi_marks_stream_terminated(
     )
 
     assert response.status_code == 200
-    assert response.get_json()["message"] == "Documentul XML a fost acceptat."
+    assert response.get_json()["message"] == "Factura a fost încărcată."
 
 
 def test_body_at_exactly_10_mib_is_allowed(local_client: tuple[FlaskClient, str]) -> None:
@@ -171,7 +176,7 @@ def test_body_at_exactly_10_mib_is_allowed(local_client: tuple[FlaskClient, str]
     response = post_xml(client, csrf_token, xml_at_limit)
 
     assert response.status_code == 200
-    assert response.get_json()["message"] == "Documentul XML a fost acceptat."
+    assert response.get_json()["message"] == "Factura a fost încărcată."
 
 
 def test_body_without_length_and_without_termination_signal_is_rejected(

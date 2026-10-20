@@ -1,6 +1,6 @@
 # XmlToPdf
 
-**Stadiu:** fundația Flask, parserul UBL cu modelul intern și încărcarea securizată în memorie sunt implementate. Afișarea facturii, imprimarea și launcherul nu sunt încă implementate.
+**Stadiu:** fundația Flask, parserul UBL cu modelul intern, încărcarea securizată în memorie și afișarea facturii în HTML sunt implementate. Stilurile finale de imprimare, paginarea, generarea PDF în backend și launcherul nu sunt implementate.
 
 Repository: https://github.com/CalinFasie/XmlToPdf<br>
 Director local vizat: `D:\Github\XmlToPdf`
@@ -31,10 +31,7 @@ Utilizatorul va deschide un XML, va vizualiza factura ca pagină HTML în browse
 Fișier XML UBL
      |
      v
-Flask local -> Parser UBL (lxml) -> Model factură
-                                          |
-                                          v
-                                  Jinja2 + HTML/CSS
+Flask local -> Parser UBL (lxml) -> Model factură -> Jinja2 + HTML/CSS local
                                           |
                     +---------------------+------------------+
                     |                                        |
@@ -51,7 +48,9 @@ Flask local -> Parser UBL (lxml) -> Model factură
 
 ## Situația implementării
 
-Aplicația acceptă local un XML UBL prin browser și îl procesează în memorie cu parserul UBL. Pentru un document acceptat afișează numai o confirmare generică; nu afișează încă factura și nu generează PDF.
+Aplicația acceptă local un XML UBL prin browser, îl procesează în memorie cu parserul UBL existent și afișează factura într-un șablon HTML din același flux. Datele facturii nu sunt păstrate în sesiune sau într-o bază de date. Imprimarea finală și generarea PDF în backend nu sunt implementate.
+
+Maparea câmpurilor modelului în șablon și regulile pentru date opționale sau repetabile sunt descrise în [`docs/UBL_MAPPING.md`](docs/UBL_MAPPING.md). Propunerea nu închide decizia O-05.
 
 ### Cerințe
 

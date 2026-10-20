@@ -1,0 +1,178 @@
+{% macro field(label, item) -%}
+  {% if item is not none and (item.value is not none or item.attributes) %}
+    <div class="datum">
+      <span class="datum-label">{{ label }}</span>
+      {% if item.value is not none %}<span class="datum-value">{{ item.value }}</span>{% endif %}
+      {% if item.attributes %}
+        <span class="datum-attributes">
+          {% for attribute in item.attributes %}{{ attribute.name }}: {{ attribute.value }}{% if not loop.last %}; {% endif %}{% endfor %}
+        </span>
+      {% endif %}
+    </div>
+  {% endif %}
+{%- endmacro %}
+
+{% macro amount(label, item) -%}
+  {% if item is not none and (item.value is not none or item.currency_id or item.attributes) %}
+    <div class="datum">
+      <span class="datum-label">{{ label }}</span>
+      <span class="datum-value">
+        {% if item.value is not none %}{{ item.value }}{% endif %}
+        {% if item.currency_id %}<span class="unit">{{ item.currency_id }}</span>{% endif %}
+      </span>
+      {% if item.attributes %}
+        <span class="datum-attributes">
+          {% for attribute in item.attributes if attribute.name != 'currencyID' %}{{ attribute.name }}: {{ attribute.value }}{% if not loop.last %}; {% endif %}{% endfor %}
+        </span>
+      {% endif %}
+    </div>
+  {% endif %}
+{%- endmacro %}
+
+{% macro quantity(label, item) -%}
+  {% if item is not none and (item.value is not none or item.unit_code or item.attributes) %}
+    <div class="datum">
+      <span class="datum-label">{{ label }}</span>
+      <span class="datum-value">
+        {% if item.value is not none %}{{ item.value }}{% endif %}
+        {% if item.unit_code %}<span class="unit">{{ item.unit_code }}</span>{% endif %}
+      </span>
+      {% if item.attributes %}
+        <span class="datum-attributes">
+          {% for attribute in item.attributes if attribute.name != 'unitCode' %}{{ attribute.name }}: {{ attribute.value }}{% if not loop.last %}; {% endif %}{% endfor %}
+        </span>
+      {% endif %}
+    </div>
+  {% endif %}
+{%- endmacro %}
+
+{% macro address_block(address, heading='Adres') -%}
+  {% if address is not none %}
+    <section class="subcard">
+      <h4>{{ heading }}</h4>
+      <div class="data-grid">
+        {{ field('Identificator adres', address.id) }}
+        {{ field('Stradă', address.street_name) }}
+        {{ field('Stradă suplimentară', address.additional_street_name) }}
+        {{ field('Număr clădire', address.building_number) }}
+        {{ field('Localitate', address.city_name) }}
+        {{ field('Cod poștal', address.postal_zone) }}
+        {{ field('Județ / regiune', address.country_subentity) }}
+        {% for line in address.address_lines %}{{ field('Detaliu adresă', line) }}{% endfor %}
+        {% if address.country %}
+          {{ field('Cod țară', address.country.identification_code) }}
+          {{ field('Țară', address.country.name) }}
+        {% endif %}
+      </div>
+    </section>
+  {% endif %}
+{%- endmacro %}
+
+{% macro contact_block(contact) -%}
+  <section class="subcard">
+    <h4>Contact</h4>
+    <div class="data-grid">
+      {{ field('Identificator contact', contact.id) }}
+      {{ field('Persoană de contact', contact.name) }}
+      {{ field('Telefon', contact.telephone) }}
+      {{ field('Fax', contact.telefax) }}
+      {{ field('E-mail', contact.electronic_mail) }}
+      {{ field('Notă contact', contact.note) }}
+    </div>
+  </section>
+{%- endmacro %}
+
+{% macro party_block(title, party, card_class='party-card') -%}
+  {% if party is not none %}
+    <section class="{{ card_class }}">
+      <h3>{{ title }}</h3>
+      {% for name in party.party_names %}
+        {% if name.value is not none %}<p class="party-name">{{ name.value }}</p>{% else %}{{ field('Denumire', name) }}{% endif %}
+      {% endfor %}
+      <div class="data-grid">
+        {% for endpoint in party.endpoint_ids %}{{ field('Identificator electronic', endpoint) }}{% endfor %}
+        {% for identification in party.identifications %}{{ field('Identificare comercială', identification.id) }}{% endfor %}
+        {% for entity in party.legal_entities %}
+          {{ field('Denumire legală', entity.registration_name) }}
+          {{ field('Identificator companie', entity.company_id) }}
+          {{ field('Formă juridică', entity.company_legal_form) }}
+          {{ field('Cod formă juridică', entity.company_legal_form_code) }}
+        {% endfor %}
+        {% for tax_scheme in party.tax_schemes %}
+          {{ field('Identificator fiscal', tax_scheme.company_id) }}
+          {% if tax_scheme.tax_scheme %}
+            {{ field('Schemă fiscală — ID', tax_scheme.tax_scheme.id) }}
+            {{ field('Schemă fiscală — denumire', tax_scheme.tax_scheme.name) }}
+            {{ field('Tip taxă', tax_scheme.tax_scheme.tax_type_code) }}
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% for address in party.postal_addresses %}{{ address_block(address, 'Adresă') }}{% endfor %}
+      {% for contact in party.contacts %}{{ contact_block(contact) }}{% endfor %}
+    </section>
+  {% endif %}
+{%- endmacro %}
+
+{% macro tax_category(category, heading='Categorie TVA') -%}
+  {% if category is not none %}
+    <section class="subcard">
+      <h4>{{ heading }}</h4>
+      <div class="data-grid">
+        {{ field('Cod categorie', category.id) }}
+        {{ field('Denumire categorie', category.name) }}
+        {{ field('Procent TVA', category.percent) }}
+        {{ field('Cod motiv scutire', category.tax_exemption_reason_code) }}
+        {% for reason in category.tax_exemption_reasons %}{{ field('Motiv scutire', reason) }}{% endfor %}
+        {% if category.tax_scheme %}
+          {{ field('Schemă fiscală — ID', category.tax_scheme.id) }}
+          {{ field('Schemă fiscală — denumire', category.tax_scheme.name) }}
+          {{ field('Tip taxă', category.tax_scheme.tax_type_code) }}
+        {% endif %}
+      </div>
+    </section>
+  {% endif %}
+{%- endmacro %}
+
+{% macro tax_total(total, heading='Total TVA') -%}
+  <section class="summary-card">
+    <h4>{{ heading }}</h4>
+    <div class="data-grid">
+      {{ amount('Valoare TVA', total.tax_amount) }}
+      {{ amount('Rotunjire TVA', total.rounding_amount) }}
+    </div>
+    {% for subtotal in total.subtotals %}
+      <section class="subcard">
+        <h4>Subtotal TVA {{ loop.index }}</h4>
+        <div class="data-grid">
+          {{ amount('Bază impozabilă', subtotal.taxable_amount) }}
+          {{ amount('Valoare TVA', subtotal.tax_amount) }}
+          {{ field('Ordine calcul', subtotal.calculation_sequence_numeric) }}
+          {{ amount('TVA în moneda tranzacției', subtotal.transaction_currency_tax_amount) }}
+          {{ field('Procent', subtotal.percent) }}
+          {{ quantity('Măsură de bază', subtotal.base_unit_measure) }}
+          {{ amount('Valoare pe unitate', subtotal.per_unit_amount) }}
+          {{ field('Interval de tier', subtotal.tier_range) }}
+          {{ field('Procent tier', subtotal.tier_rate_percent) }}
+        </div>
+        {% if subtotal.tax_category %}{{ tax_category(subtotal.tax_category) }}{% endif %}
+      </section>
+    {% endfor %}
+  </section>
+{%- endmacro %}
+
+{% macro financial_account(account, heading) -%}
+  {% if account is not none %}
+    <section class="subcard">
+      <h4>{{ heading }}</h4>
+      <div class="data-grid">
+        {{ field('IBAN / identificator cont', account.id) }}
+        {{ field('Denumire cont', account.name) }}
+        {{ field('Tip cont', account.account_type_code) }}
+        {{ field('Monedă cont', account.currency_code) }}
+        {{ field('Instituție financiară', account.financial_institution_id) }}
+        {{ field('Identificator sucursală', account.branch_id) }}
+        {{ field('Denumire sucursală', account.branch_name) }}
+      </div>
+    </section>
+  {% endif %}
+{%- endmacro %}
