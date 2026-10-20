@@ -4,9 +4,22 @@
 # Fișiere generate de Python
 __pycache__/
 *.pyc
+*.egg-info/
 
 # Fișiere cu informații secrete
 .env
 
-# PDF-uri generate de aplicație
+# PDF-uri generate sau de referință; doar fixture-urile sintetice din teste pot fi versionate
 *.pdf
+!/tests/fixtures/**/*.pdf
+
+# Mostre private: păstrate numai local, niciodată în Git
+/samples/private/
+
+# Referințe reale aflate în rădăcina repository-ului local
+/7004378.xml
+/7004378.pdf
+
+# Cache-uri de testare și analiză
+.pytest_cache/
+.ruff_cache/
