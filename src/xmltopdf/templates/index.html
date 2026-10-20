@@ -9,7 +9,51 @@
     <main>
       <h1>XmlToPdf</h1>
       <p>Fundația aplicației web locale este pornită.</p>
-      <p>Conversia facturilor UBL nu este disponibilă încă.</p>
+      <p>Selectează un fișier XML UBL de cel mult 10 MiB. Conținutul este procesat local, fără a fi salvat de aplicație.</p>
+      <form id="upload-form" data-csrf-token="{{ csrf_token }}">
+        <label for="xml-file">Fișier XML</label>
+        <input id="xml-file" name="xml-file" type="file" accept=".xml,application/xml,text/xml" required>
+        <button type="submit">Procesează XML</button>
+      </form>
+      <p id="upload-status" role="status" aria-live="polite"></p>
     </main>
+    <script>
+      const form = document.getElementById("upload-form");
+      const fileInput = document.getElementById("xml-file");
+      const status = document.getElementById("upload-status");
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        status.textContent = "";
+
+        const file = fileInput.files[0];
+        if (!file) {
+          status.textContent = "Selectează un fișier XML.";
+          return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+          status.textContent = "XML-ul depășește limita de 10 MiB.";
+          return;
+        }
+
+        try {
+          const response = await fetch("/upload", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/xml",
+              "X-CSRF-Token": form.dataset.csrfToken
+            },
+            body: file
+          });
+          const result = await response.json();
+          status.textContent = result.message || "Cererea nu a putut fi procesată.";
+          if (response.ok) {
+            fileInput.value = "";
+          }
+        } catch (_error) {
+          status.textContent = "Nu s-a putut comunica cu aplicația locală.";
+        }
+      });
+    </script>
   </body>
 </html>

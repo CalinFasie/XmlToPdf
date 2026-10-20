@@ -753,7 +753,10 @@ def parse_invoice(xml_content: bytes) -> Invoice:
 
     if root.getroottree().docinfo.doctype:
         raise XmlSecurityError("Documentele XML cu DOCTYPE nu sunt acceptate.")
-    if any(element.tag == _qname(XINCLUDE_NS, "include") for element in root.iter()):
+    if any(
+        isinstance(element.tag, str) and etree.QName(element).namespace == XINCLUDE_NS
+        for element in root.iter()
+    ):
         raise XmlSecurityError("Documentele XML cu XInclude nu sunt acceptate.")
     if root.tag != _qname(INVOICE_NS, "Invoice"):
         raise UnsupportedDocumentError("Tipul sau namespace-ul documentului XML nu este suportat.")

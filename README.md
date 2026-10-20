@@ -1,6 +1,6 @@
 # XmlToPdf
 
-**Stadiu:** fundația Flask și pagina locală de pornire sunt implementate. Parserul UBL, încărcarea XML, afișarea facturii, imprimarea și launcherul nu sunt încă implementate.
+**Stadiu:** fundația Flask, parserul UBL cu modelul intern și încărcarea securizată în memorie sunt implementate. Afișarea facturii, imprimarea și launcherul nu sunt încă implementate.
 
 Repository: https://github.com/CalinFasie/XmlToPdf<br>
 Director local vizat: `D:\Github\XmlToPdf`
@@ -51,7 +51,7 @@ Flask local -> Parser UBL (lxml) -> Model factură
 
 ## Situația implementării
 
-Aplicația curentă servește numai pagina HTML de pornire. Nu procesează fișiere XML și nu generează PDF.
+Aplicația acceptă local un XML UBL prin browser și îl procesează în memorie cu parserul UBL. Pentru un document acceptat afișează numai o confirmare generică; nu afișează încă factura și nu generează PDF.
 
 ### Cerințe
 

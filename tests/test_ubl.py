@@ -20,7 +20,9 @@ from xmltopdf.ubl import (
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "ubl_invoice_minimal.xml"
-MINIMAL_XML = FIXTURE.read_bytes()
+# Keep byte-level mutation tests stable when Git checks out this fixture with
+# Windows CRLF line endings.
+MINIMAL_XML = FIXTURE.read_bytes().replace(b"\r\n", b"\n")
 
 
 def _replace_once(xml: bytes, old: bytes, new: bytes) -> bytes:
@@ -385,15 +387,13 @@ def test_doctype_token_inside_comment_is_not_treated_as_a_declaration() -> None:
     assert parse_invoice(xml).invoice_id.value == "SYN-INV-001"
 
 
-def test_rejects_xinclude_without_processing_it() -> None:
-    xml = MINIMAL_XML.replace(
-        b"<Invoice ",
-        b'<Invoice xmlns:xi="http://www.w3.org/2001/XInclude" ',
-    )
-    xml = _append_to_invoice(
-        xml,
-        b'<xi:include href="file:///not-read.xml" parse="text"/>',
-    )
+@pytest.mark.parametrize("local_name", ["include", "fallback", "unexpected"])
+def test_rejects_any_element_in_xinclude_namespace(local_name: str) -> None:
+    xinclude_element = (
+        f'<xi:{local_name} xmlns:xi="http://www.w3.org/2001/XInclude" '
+        'href="file:///not-read.xml" parse="text"/>'
+    ).encode()
+    xml = _append_to_invoice(MINIMAL_XML, xinclude_element)
 
     with pytest.raises(XmlSecurityError, match="XInclude"):
         parse_invoice(xml)
