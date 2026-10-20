@@ -107,12 +107,17 @@ def create_app() -> Flask:
             return jsonify(ok=False, message="Fișierul XML este gol sau lipsește."), 400
 
         try:
-            ubl.parse_invoice(xml_content)
+            invoice = ubl.parse_invoice(xml_content)
         except ubl.UnsupportedDocumentError:
             return jsonify(ok=False, message="Tipul documentului XML nu este suportat."), 422
         except ubl.InvoiceParseError as error:
             return jsonify(ok=False, message=str(error)), 400
 
-        return jsonify(ok=True, message="Documentul XML a fost acceptat."), 200
+        invoice_html = render_template("invoice.html", invoice=invoice)
+        return jsonify(
+            ok=True,
+            message="Factura a fost încărcată.",
+            invoice_html=invoice_html,
+        ), 200
 
     return app

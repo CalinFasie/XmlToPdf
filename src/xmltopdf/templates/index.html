@@ -4,26 +4,43 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>XmlToPdf</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   </head>
   <body>
-    <main>
-      <h1>XmlToPdf</h1>
-      <p>Fundația aplicației web locale este pornită.</p>
-      <p>Selectează un fișier XML UBL de cel mult 10 MiB. Conținutul este procesat local, fără a fi salvat de aplicație.</p>
-      <form id="upload-form" data-csrf-token="{{ csrf_token }}">
-        <label for="xml-file">Fișier XML</label>
-        <input id="xml-file" name="xml-file" type="file" accept=".xml,application/xml,text/xml" required>
-        <button type="submit">Procesează XML</button>
-      </form>
-      <p id="upload-status" role="status" aria-live="polite"></p>
+    <header class="app-header">
+      <div class="app-header-inner">
+        <a class="brand" href="/" aria-label="XmlToPdf — pagina principală">XmlToPdf</a>
+        <span>Vizualizator local de facturi UBL</span>
+      </div>
+    </header>
+    <main class="app-main">
+      <section class="upload-panel" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">Procesare locală</p>
+          <h1 id="page-title">Vizualizează o factură</h1>
+          <p class="intro">Alege un XML UBL de cel mult 10 MiB. Documentul este procesat în memoria aplicației și nu este salvat de aceasta.</p>
+        </div>
+        <form id="upload-form" data-csrf-token="{{ csrf_token }}">
+          <label for="xml-file">Fișier XML</label>
+          <div class="upload-controls">
+            <input id="xml-file" name="xml-file" type="file" accept=".xml,application/xml,text/xml" required>
+            <button type="submit">Afișează factura</button>
+          </div>
+        </form>
+        <p id="upload-status" class="status" role="status" aria-live="polite"></p>
+      </section>
+      <section id="invoice-container" aria-live="polite" aria-label="Factura încărcată"></section>
     </main>
     <script>
       const form = document.getElementById("upload-form");
       const fileInput = document.getElementById("xml-file");
+      const submitButton = form.querySelector("button[type='submit']");
       const status = document.getElementById("upload-status");
+      const invoiceContainer = document.getElementById("invoice-container");
 
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
+        invoiceContainer.replaceChildren();
         status.textContent = "";
 
         const file = fileInput.files[0];
@@ -36,6 +53,8 @@
           return;
         }
 
+        submitButton.disabled = true;
+        status.textContent = "Factura se procesează local…";
         try {
           const response = await fetch("/upload", {
             method: "POST",
@@ -46,12 +65,17 @@
             body: file
           });
           const result = await response.json();
-          status.textContent = result.message || "Cererea nu a putut fi procesată.";
-          if (response.ok) {
-            fileInput.value = "";
+          if (!response.ok) {
+            status.textContent = result.message || "Cererea nu a putut fi procesată.";
+            return;
           }
+          invoiceContainer.innerHTML = result.invoice_html;
+          status.textContent = result.message || "Factura a fost încărcată.";
+          fileInput.value = "";
         } catch (_error) {
           status.textContent = "Nu s-a putut comunica cu aplicația locală.";
+        } finally {
+          submitButton.disabled = false;
         }
       });
     </script>

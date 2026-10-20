@@ -1,0 +1,158 @@
+{% import "_invoice_macros.html" as ui %}
+<article class="invoice" aria-labelledby="invoice-title">
+  <header class="invoice-heading">
+    <div>
+      <p class="section-kicker">Document UBL</p>
+      <h2 id="invoice-title">Factură</h2>
+      {% if invoice.invoice_id.value is not none %}<p class="invoice-number">{{ invoice.invoice_id.value }}</p>{% endif %}
+      {% if invoice.invoice_id.attributes %}
+        <p class="datum-attributes">
+          {% for attribute in invoice.invoice_id.attributes %}{{ attribute.name }}: {{ attribute.value }}{% if not loop.last %}; {% endif %}{% endfor %}
+        </p>
+      {% endif %}
+    </div>
+    <div class="invoice-meta">
+      {{ ui.field('Data emiterii', invoice.issue_date) }}
+      {{ ui.field('Scadență', invoice.due_date) }}
+      {{ ui.field('Tip document', invoice.invoice_type_code) }}
+      {{ ui.field('Moneda documentului', invoice.document_currency_code) }}
+      {{ ui.field('Moneda TVA', invoice.tax_currency_code) }}
+    </div>
+  </header>
+
+  <div class="parties-grid">
+    {{ ui.party_block('Furnizor', invoice.supplier) }}
+    {{ ui.party_block('Client', invoice.customer) }}
+  </div>
+
+  <section class="invoice-section" aria-labelledby="lines-heading">
+    <h3 id="lines-heading">Linii factură</h3>
+    <div class="table-scroll">
+      <table class="invoice-lines">
+        <thead>
+          <tr>
+            <th scope="col">Nr.</th>
+            <th scope="col">Articol / descriere</th>
+            <th scope="col">Cantitate</th>
+            <th scope="col">Preț unitar</th>
+            <th scope="col">Valoare netă</th>
+            <th scope="col">TVA</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for line in invoice.lines %}
+            <tr>
+              <td>{{ ui.field('Linie', line.id) }}</td>
+              <td>
+                {% for name in line.item.names %}
+                  {% if name.value is not none %}<p class="item-description">{{ name.value }}</p>{% else %}{{ ui.field('Denumire articol', name) }}{% endif %}
+                {% endfor %}
+                {% for description in line.item.descriptions %}
+                  {% if description.value is not none %}<p class="item-description">{{ description.value }}</p>{% else %}{{ ui.field('Descriere articol', description) }}{% endif %}
+                {% endfor %}
+                {% if line.item.sellers_item_identification %}{{ ui.field('Cod articol furnizor', line.item.sellers_item_identification.id) }}{% endif %}
+                {% if line.item.standard_item_identification %}{{ ui.field('Cod standard articol', line.item.standard_item_identification.id) }}{% endif %}
+                {% for category in line.item.classified_tax_categories %}{{ ui.tax_category(category, 'Categorie TVA linie') }}{% endfor %}
+                {% for total in line.tax_totals %}{{ ui.tax_total(total, 'TVA linie ' ~ loop.index) }}{% endfor %}
+              </td>
+              <td>{{ ui.quantity('Cantitate facturată', line.invoiced_quantity) }}</td>
+              <td>
+                {% if line.price %}
+                  {{ ui.amount('Preț unitar', line.price.price_amount) }}
+                  {{ ui.quantity('Baza prețului', line.price.base_quantity) }}
+                {% endif %}
+              </td>
+              <td>{{ ui.amount('Valoare netă', line.line_extension_amount) }}</td>
+              <td>
+                {% for category in line.item.classified_tax_categories %}
+                  <div class="data-grid">
+                    {{ ui.field('Categorie', category.id) }}
+                    {{ ui.field('Procent TVA', category.percent) }}
+                  </div>
+                {% endfor %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {% if invoice.tax_totals %}
+    <section class="invoice-section" aria-labelledby="tax-heading">
+      <h3 id="tax-heading">TVA la nivel de document</h3>
+      <div class="summary-list">
+        {% for total in invoice.tax_totals %}{{ ui.tax_total(total, 'Total TVA ' ~ loop.index) }}{% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  {% if invoice.legal_monetary_total %}
+    <section class="invoice-section" aria-labelledby="totals-heading">
+      <h3 id="totals-heading">Totaluri</h3>
+      <div class="summary-card">
+        <div class="data-grid">
+          {{ ui.amount('Valoare netă linii', invoice.legal_monetary_total.line_extension_amount) }}
+          {{ ui.amount('Total fără TVA', invoice.legal_monetary_total.tax_exclusive_amount) }}
+          {{ ui.amount('Total cu TVA', invoice.legal_monetary_total.tax_inclusive_amount) }}
+          {{ ui.amount('Total reduceri', invoice.legal_monetary_total.allowance_total_amount) }}
+          {{ ui.amount('Total costuri suplimentare', invoice.legal_monetary_total.charge_total_amount) }}
+          {{ ui.amount('Plătit în avans', invoice.legal_monetary_total.prepaid_amount) }}
+          {{ ui.amount('Rotunjire la plată', invoice.legal_monetary_total.payable_rounding_amount) }}
+        </div>
+        <div class="grand-total">{{ ui.amount('De plată', invoice.legal_monetary_total.payable_amount) }}</div>
+      </div>
+    </section>
+  {% endif %}
+
+  {% if invoice.payment_means %}
+    <section class="invoice-section" aria-labelledby="payment-heading">
+      <h3 id="payment-heading">Plată</h3>
+      <div class="summary-list">
+        {% for payment in invoice.payment_means %}
+          <section class="summary-card">
+            <h4>Mijloc de plată {{ loop.index }}</h4>
+            <div class="data-grid">
+              {{ ui.field('Cod mijloc de plată', payment.payment_means_code) }}
+              {{ ui.field('Data scadenței plății', payment.payment_due_date) }}
+              {{ ui.field('Canal de plată', payment.payment_channel_code) }}
+              {{ ui.field('Identificator instrucțiune', payment.instruction_id) }}
+              {% for note in payment.instruction_notes %}{{ ui.field('Instrucțiune de plată', note) }}{% endfor %}
+              {% for payment_id in payment.payment_ids %}{{ ui.field('Referință plată', payment_id) }}{% endfor %}
+            </div>
+            {{ ui.financial_account(payment.payee_financial_account, 'Cont beneficiar') }}
+            {{ ui.financial_account(payment.payer_financial_account, 'Cont plătitor') }}
+          </section>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  {% if invoice.deliveries %}
+    <section class="invoice-section" aria-labelledby="delivery-heading">
+      <h3 id="delivery-heading">Livrare</h3>
+      <div class="summary-list">
+        {% for delivery in invoice.deliveries %}
+          <section class="summary-card">
+            <h4>Livrare {{ loop.index }}</h4>
+            <div class="data-grid">
+              {{ ui.field('Data livrării', delivery.actual_delivery_date) }}
+              {{ ui.field('Ora livrării', delivery.actual_delivery_time) }}
+            </div>
+            {% if delivery.delivery_party %}{{ ui.party_block('Destinatar', delivery.delivery_party) }}{% endif %}
+            {% if delivery.delivery_location %}
+              <section class="subcard">
+                <h4>Locul livrării</h4>
+                <div class="data-grid">
+                  {{ ui.field('Identificator locație', delivery.delivery_location.id) }}
+                  {% for description in delivery.delivery_location.descriptions %}{{ ui.field('Descriere locație', description) }}{% endfor %}
+                </div>
+                {% if delivery.delivery_location.address %}{{ ui.address_block(delivery.delivery_location.address, 'Adresă livrare') }}{% endif %}
+              </section>
+            {% endif %}
+          </section>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+</article>
