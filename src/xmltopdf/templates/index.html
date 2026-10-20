@@ -38,6 +38,16 @@
       const status = document.getElementById("upload-status");
       const invoiceContainer = document.getElementById("invoice-container");
 
+      invoiceContainer.addEventListener("click", (event) => {
+        if (!(event.target instanceof Element)) {
+          return;
+        }
+        const printButton = event.target.closest('[data-action="print"]');
+        if (printButton) {
+          window.print();
+        }
+      });
+
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         invoiceContainer.replaceChildren();

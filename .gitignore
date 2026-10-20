@@ -19,6 +19,7 @@ __pycache__/
 # Referințe reale aflate în rădăcina repository-ului local
 /7004378.xml
 /7004378.pdf
+/XmlToPdf_codex_foundation_v0.2.zip
 
 # Cache-uri de testare și analiză
 .pytest_cache/
