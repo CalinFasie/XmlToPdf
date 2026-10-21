@@ -512,33 +512,28 @@ button:disabled {
 }
 
 .screen-pair {
-  display: flex;
-  align-items: baseline;
-  gap: 0 6px;
+  display: block;
   min-width: 0;
   font-size: 13px;
   line-height: 1.35;
 }
 
 .screen-pair dt {
-  flex: 0 1 auto;
-  max-width: 45%;
+  display: inline;
   color: #52677b;
   font-weight: 650;
-  overflow-wrap: anywhere;
 }
 
 .screen-pair dt::after {
-  content: ":";
+  content: ": ";
 }
 
 .screen-pair dd {
-  flex: 1 1 0;
-  min-width: 0;
+  display: inline;
   margin: 0;
   color: #1f3042;
   overflow-wrap: anywhere;
-  white-space: pre-wrap;
+  white-space: normal;
 }
 
 .screen-value {
@@ -584,12 +579,8 @@ button:disabled {
 }
 
 .screen-total {
-  display: flex;
+  display: block;
   flex: 1 1 auto;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: baseline;
-  column-gap: 5px;
   min-width: 92px;
   padding: 3px 9px;
   border-right: 1px solid #dce3e9;

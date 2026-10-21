@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from flask.testing import FlaskClient
+from lxml import html as lxml_html
 
 from xmltopdf import create_app
 
@@ -138,26 +139,29 @@ def test_screen_layout_has_three_compact_header_zones_and_separate_print_css(
     assert ".screen-total-band" not in print_css
 
 
-def test_screen_label_value_styles_keep_pairs_inline_and_values_wrappable() -> None:
+def test_screen_label_value_styles_use_inline_flow_without_reserved_columns() -> None:
     css = (Path(__file__).parents[1] / "src" / "xmltopdf" / "static" / "css" / "app.css").read_text(
         encoding="utf-8"
     )
-    screen_css = css[: css.index("@page")]
+    screen_css = css[css.index("/* Compact invoice presentation"): css.index("@page")]
     pair_rule = re.search(r"\.screen-pair\s*\{([^}]*)\}", screen_css)
     label_rule = re.search(r"\.screen-pair dt\s*\{([^}]*)\}", screen_css)
     value_rule = re.search(r"\.screen-pair dd\s*\{([^}]*)\}", screen_css)
     total_rule = re.search(r"\.screen-total\s*\{([^}]*)\}", screen_css)
     detail_rule = re.search(r"\.screen-detail\s*\{([^}]*)\}", screen_css)
 
-    assert pair_rule is not None and "display: flex;" in pair_rule.group(1)
+    assert pair_rule is not None and "display: block;" in pair_rule.group(1)
+    assert label_rule is not None and "display: inline;" in label_rule.group(1)
+    assert value_rule is not None and "display: inline;" in value_rule.group(1)
+    assert "flex" not in pair_rule.group(1) + label_rule.group(1) + value_rule.group(1)
     assert "grid-template-columns" not in pair_rule.group(1)
-    assert label_rule is not None and "max-width: 45%;" in label_rule.group(1)
-    assert value_rule is not None and "flex: 1 1 0;" in value_rule.group(1)
-    assert "min-width: 0;" in value_rule.group(1)
     assert "overflow-wrap: anywhere;" in value_rule.group(1)
-    assert total_rule is not None and "flex-direction: row;" in total_rule.group(1)
-    assert "flex-wrap: wrap;" in total_rule.group(1)
+    assert "white-space: normal;" in value_rule.group(1)
+    assert total_rule is not None and "display: block;" in total_rule.group(1)
     assert detail_rule is not None and "display: inline-block;" in detail_rule.group(1)
+    responsive_css = screen_css[screen_css.index("@media (max-width: 760px)"):]
+    assert ".screen-pair dt" not in responsive_css
+    assert ".screen-pair dd" not in responsive_css
 
 
 @pytest.mark.parametrize("line_count", [1, 2, 10, 30, 100])
@@ -404,6 +408,50 @@ def test_repeated_tax_subtotals_totals_payment_means_and_delivery_are_rendered(
         r'<span class="screen-value">.*?</span>',
         html,
         re.DOTALL,
+    )
+
+    document = lxml_html.fromstring(html)
+    pair_fields = document.xpath('.//div[@class="screen-pair"]')
+    pairs_by_label: dict[str, list] = {}
+    for pair in pair_fields:
+        assert len(pair) == 2
+        assert pair[0].tag == "dt"
+        assert pair[1].tag == "dd"
+        assert pair[0].tail is None
+        assert pair[1].text is None
+        pairs_by_label.setdefault(pair[0].text_content(), []).append(pair)
+    for label in (
+        "Număr",
+        "Denumire",
+        "ID fiscal",
+        "Telefon",
+        "Stradă",
+        "Localitate",
+        "Cod mijloc de plată",
+        "IBAN / ID cont",
+        "Data livrării",
+        "Descriere locație",
+    ):
+        assert label in pairs_by_label
+        assert pairs_by_label[label][0][1][0].tag == "span"
+
+    payable = document.xpath('.//div[contains(concat(" ", normalize-space(@class), " "), " screen-payable ")]')[0]
+    assert [child.tag for child in payable] == ["span", "span"]
+    assert "screen-total-label" in payable[0].get("class", "")
+    assert "screen-total-value" in payable[1].get("class", "")
+    tier_detail = document.xpath('.//span[@class="screen-detail"][strong="Interval de tier:"]')[0]
+    assert tier_detail[0].tag == "strong"
+    assert tier_detail[0].tail == " "
+    assert tier_detail[1].tag == "span"
+    assert "screen-value" in tier_detail[1].get("class", "")
+
+    item_codes = document.xpath('.//div[@class="screen-item-code"]')
+    assert item_codes
+    assert all(not code.xpath(".//br") for code in item_codes)
+    assert any(
+        code.text_content().startswith("Bază:")
+        and code.xpath('./span[contains(concat(" ", normalize-space(@class), " "), " screen-value ")]')
+        for code in item_codes
     )
     for value in (
         "Articol 001",

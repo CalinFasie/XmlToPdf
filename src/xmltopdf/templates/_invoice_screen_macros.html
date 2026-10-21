@@ -1,24 +1,24 @@
 {% macro value(item) -%}
-  {% if item is not none %}
-    {% if item.value is not none %}<span class="screen-value">{{ item.value }}</span>{% endif %}
-    {% for attribute in item.attributes %}<span class="screen-attribute">{{ attribute.name }}={{ attribute.value }}</span>{% endfor %}
-  {% endif %}
+  {%- if item is not none -%}
+    {%- if item.value is not none -%}<span class="screen-value">{{ item.value }}</span>{%- endif -%}
+    {%- for attribute in item.attributes -%}<span class="screen-attribute">{{ attribute.name }}={{ attribute.value }}</span>{%- endfor -%}
+  {%- endif -%}
 {%- endmacro %}
 
 {% macro amount_value(item) -%}
-  {% if item is not none %}
-    {% if item.value is not none %}<span class="screen-value">{{ item.value }}</span>{% endif %}
-    {% if item.currency_id %}<span class="screen-unit">{{ item.currency_id }}</span>{% endif %}
-    {% for attribute in item.attributes if attribute.name != 'currencyID' %}<span class="screen-attribute">{{ attribute.name }}={{ attribute.value }}</span>{% endfor %}
-  {% endif %}
+  {%- if item is not none -%}
+    {%- if item.value is not none -%}<span class="screen-value">{{ item.value }}</span>{%- endif -%}
+    {%- if item.currency_id -%}<span class="screen-unit">{{ item.currency_id }}</span>{%- endif -%}
+    {%- for attribute in item.attributes if attribute.name != 'currencyID' -%}<span class="screen-attribute">{{ attribute.name }}={{ attribute.value }}</span>{%- endfor -%}
+  {%- endif -%}
 {%- endmacro %}
 
 {% macro quantity_value(item) -%}
-  {% if item is not none %}
-    {% if item.value is not none %}<span class="screen-value">{{ item.value }}</span>{% endif %}
-    {% if item.unit_code %}<span class="screen-unit">{{ item.unit_code }}</span>{% endif %}
-    {% for attribute in item.attributes if attribute.name != 'unitCode' %}<span class="screen-attribute">{{ attribute.name }}={{ attribute.value }}</span>{% endfor %}
-  {% endif %}
+  {%- if item is not none -%}
+    {%- if item.value is not none -%}<span class="screen-value">{{ item.value }}</span>{%- endif -%}
+    {%- if item.unit_code -%}<span class="screen-unit">{{ item.unit_code }}</span>{%- endif -%}
+    {%- for attribute in item.attributes if attribute.name != 'unitCode' -%}<span class="screen-attribute">{{ attribute.name }}={{ attribute.value }}</span>{%- endfor -%}
+  {%- endif -%}
 {%- endmacro %}
 
 {% macro pair(label, item) -%}
@@ -28,13 +28,9 @@
 {%- endmacro %}
 
 {% macro detail(label, item, kind='text') -%}
-  {% if item is not none and (item.value is not none or item.attributes or (kind == 'amount' and item.currency_id) or (kind == 'quantity' and item.unit_code)) %}
-    <span class="screen-detail"><strong>{{ label }}:</strong>
-      {% if kind == 'amount' %}{{ amount_value(item) }}
-      {% elif kind == 'quantity' %}{{ quantity_value(item) }}
-      {% else %}{{ value(item) }}{% endif %}
-    </span>
-  {% endif %}
+  {%- if item is not none and (item.value is not none or item.attributes or (kind == 'amount' and item.currency_id) or (kind == 'quantity' and item.unit_code)) -%}
+    <span class="screen-detail"><strong>{{ label }}:</strong> {% if kind == 'amount' %}{{ amount_value(item) }}{% elif kind == 'quantity' %}{{ quantity_value(item) }}{% else %}{{ value(item) }}{% endif %}</span>
+  {%- endif %}
 {%- endmacro %}
 
 {% macro address(address, heading='Adresă') -%}
