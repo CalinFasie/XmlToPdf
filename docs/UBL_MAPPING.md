@@ -1,6 +1,6 @@
-# Mapare UBL–HTML — propunere pentru Task 004
+# Mapare UBL–HTML — prezentarea ecranului și imprimării
 
-Acest document descrie maparea folosită de prototipul HTML. Este o propunere de prezentare, fără interpretări sau calcule fiscale noi. **O-05 rămâne deschisă** până la review-ul utilizatorului.
+Acest document descrie maparea folosită de prezentarea HTML pentru ecran și de șablonul separat de imprimare. Este o propunere de prezentare, fără interpretări sau calcule fiscale noi. **O-05 rămâne deschisă** până la review-ul utilizatorului.
 
 ## Reguli generale
 
@@ -15,7 +15,7 @@ Acest document descrie maparea folosită de prototipul HTML. Este o propunere de
 | Model intern | Prezentare HTML |
 |---|---|
 | `Invoice.invoice_id`, `issue_date`, `due_date`, `invoice_type_code`, `document_currency_code`, `tax_currency_code` | Titlul și zona de metadate a facturii; datele opționale lipsă sunt omise. |
-| `Invoice.supplier`, `Invoice.customer` | Carduri distincte Furnizor și Client. |
+| `Invoice.supplier`, `Invoice.customer` | Zone stânga/dreapta în antetul compact pe ecran; carduri distincte în versiunea pentru imprimare. |
 | `Party.party_names`, `Party.endpoint_ids` | Denumirile și identificatorii electronici, fiecare apariție separat. |
 | `Party.identifications[].id` | Identificare comercială; atributele, inclusiv schemele disponibile, rămân lângă valoare. |
 | `Party.legal_entities[]` | Denumire legală, identificator companie, formă juridică și codul formei juridice. |
@@ -27,7 +27,7 @@ Acest document descrie maparea folosită de prototipul HTML. Este o propunere de
 
 | Model intern | Prezentare HTML |
 |---|---|
-| `Invoice.lines[]` / `InvoiceLine` | Tabel în ordinea XML, cu identificator, articol/descriere, cantitate, preț, valoare netă și clasificare TVA. |
+| `Invoice.lines[]` / `InvoiceLine` | Tabel compact în ordinea XML, cu identificator, articol/descriere/cod, cantitate, preț, valoare netă, clasificare TVA și totalurile TVA de linie. |
 | `InvoiceLine.item.names[]`, `descriptions[]` | Toate denumirile și descrierile articolului, pe rânduri distincte. Textul lung se încadrează și păstrează liniile noi. |
 | `Item.sellers_item_identification`, `standard_item_identification` | Cod articol furnizor și identificator standard, când există. |
 | `InvoiceLine.invoiced_quantity` | Textul cantității și `unit_code` distinct. |
@@ -58,4 +58,6 @@ Nicio valoare financiară nu este recalculată, rotunjită, localizată sau reco
 
 ## Domeniu vizual curent
 
-Șablonul oferă o vizualizare HTML lizibilă și adaptabilă pentru ecran. Stilurile finale de imprimare A4, paginarea fizică și numerotarea paginilor nu fac parte din Task 004.
+Pe ecran, antetul folosește trei zone compacte, totalurile sunt într-o bandă orizontală, iar liniile și subtotalurile TVA sunt prezentate tabelar. Plata și livrarea sunt alăturate pe desktop și trec într-o singură coloană pe ecrane înguste; tabelele pot derula orizontal când nu încap. Stilurile de ecran sunt delimitate de `.invoice-screen` și nu schimbă geometria imprimării.
+
+Imprimarea folosește în continuare șablonul separat `invoice_print.html` și blocul `@media print`. Utilizatorul a confirmat manual un PDF A4 Landscape de o pagină pentru factura de referință; această notă consemnează rezultatul furnizat și nu închide O-06 pentru documente mai mari sau configurații diferite.

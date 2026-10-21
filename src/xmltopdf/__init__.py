@@ -113,7 +113,7 @@ def create_app() -> Flask:
         except ubl.InvoiceParseError as error:
             return jsonify(ok=False, message=str(error)), 400
 
-        invoice_html = render_template("invoice.html", invoice=invoice)
+        invoice_html = render_template("invoice_bundle.html", invoice=invoice)
         return jsonify(
             ok=True,
             message="Factura a fost încărcată.",

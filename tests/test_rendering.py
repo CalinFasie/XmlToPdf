@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from flask.testing import FlaskClient
+from lxml import html as lxml_html
 
 from xmltopdf import create_app
 
@@ -59,6 +60,18 @@ def _render(client: FlaskClient, csrf_token: str, xml: bytes):
     )
 
 
+def _screen_markup(html: str) -> str:
+    screen, marker, _print = html.partition('<div class="invoice-print">')
+    assert marker
+    return screen
+
+
+def _print_markup(html: str) -> str:
+    _screen, marker, printed = html.partition('<div class="invoice-print">')
+    assert marker
+    return printed
+
+
 def test_invoice_rendering_shows_header_parties_and_distinct_identifiers(
     local_client: tuple[FlaskClient, str],
 ) -> None:
@@ -73,9 +86,10 @@ def test_invoice_rendering_shows_header_parties_and_distinct_identifiers(
     assert response.status_code == 200
     payload = response.get_json()
     html = payload["invoice_html"]
+    print_html = _print_markup(html)
     assert payload["ok"] is True
     assert "SYN-INV-001" in html
-    assert "schemeID: INV" in html
+    assert "schemeID=INV" in html
     assert "2026-01-15" in html
     assert "RON" in html
     assert "Furnizor Sintetic SRL" in html
@@ -83,11 +97,74 @@ def test_invoice_rendering_shows_header_parties_and_distinct_identifiers(
     assert "RO-SYN-001" in html
     assert "RO-SYN-002" in html
     assert "Identificare comercială" in html
-    assert "Identificator fiscal" in html
+    assert "ID fiscal" in html
+    assert "Furnizor" in print_html
+    assert "Client" in print_html
+    assert print_html.count("RO-SYN-001") == 1
+    assert print_html.count("RO-SYN-002") == 1
     assert response.headers["Cache-Control"] == "no-store"
 
 
-@pytest.mark.parametrize("line_count", [1, 10, 30, 100])
+def test_screen_layout_has_three_compact_header_zones_and_separate_print_css(
+    local_client: tuple[FlaskClient, str],
+) -> None:
+    client, csrf_token = local_client
+    xml = _append_invoice_children(
+        MINIMAL_XML,
+        b'<cac:LegalMonetaryTotal><cbc:PayableAmount currencyID="RON">0012.3400</cbc:PayableAmount>'
+        b"</cac:LegalMonetaryTotal>",
+    )
+    response = _render(client, csrf_token, xml)
+    html = response.get_json()["invoice_html"]
+    screen_html = _screen_markup(html)
+    css = (Path(__file__).parents[1] / "src" / "xmltopdf" / "static" / "css" / "app.css").read_text(
+        encoding="utf-8"
+    )
+    print_css = css[css.index("@media print"):]
+
+    header_start = screen_html.index('<header class="screen-header">')
+    supplier = screen_html.index('<section class="screen-party">', header_start)
+    document = screen_html.index('<section class="screen-document"', supplier)
+    customer = screen_html.index('<section class="screen-party">', document)
+    assert supplier < document < customer
+    assert 'class="screen-total-band"' in screen_html
+    assert "0012.3400" in screen_html
+    assert 'class="invoice-lines screen-lines"' in screen_html
+    assert ".screen-header" in css[:css.index("@page")]
+    assert ".screen-total-band" in css[:css.index("@page")]
+    assert "grid-template-columns: minmax(0, 1fr);" in css[css.index(".screen-header {"):css.index("@page")]
+    assert "grid-template-columns: minmax(0, 1fr);" in css[css.index(".screen-bottom-grid {"):css.index("@page")]
+    assert "overflow-x: auto;" in css[css.index(".invoice-screen .table-scroll"):css.index("@page")]
+    assert ".screen-header" not in print_css
+    assert ".screen-total-band" not in print_css
+
+
+def test_screen_label_value_styles_use_inline_flow_without_reserved_columns() -> None:
+    css = (Path(__file__).parents[1] / "src" / "xmltopdf" / "static" / "css" / "app.css").read_text(
+        encoding="utf-8"
+    )
+    screen_css = css[css.index("/* Compact invoice presentation"): css.index("@page")]
+    pair_rule = re.search(r"\.screen-pair\s*\{([^}]*)\}", screen_css)
+    label_rule = re.search(r"\.screen-pair dt\s*\{([^}]*)\}", screen_css)
+    value_rule = re.search(r"\.screen-pair dd\s*\{([^}]*)\}", screen_css)
+    total_rule = re.search(r"\.screen-total\s*\{([^}]*)\}", screen_css)
+    detail_rule = re.search(r"\.screen-detail\s*\{([^}]*)\}", screen_css)
+
+    assert pair_rule is not None and "display: block;" in pair_rule.group(1)
+    assert label_rule is not None and "display: inline;" in label_rule.group(1)
+    assert value_rule is not None and "display: inline;" in value_rule.group(1)
+    assert "flex" not in pair_rule.group(1) + label_rule.group(1) + value_rule.group(1)
+    assert "grid-template-columns" not in pair_rule.group(1)
+    assert "overflow-wrap: anywhere;" in value_rule.group(1)
+    assert "white-space: normal;" in value_rule.group(1)
+    assert total_rule is not None and "display: block;" in total_rule.group(1)
+    assert detail_rule is not None and "display: inline-block;" in detail_rule.group(1)
+    responsive_css = screen_css[screen_css.index("@media (max-width: 760px)"):]
+    assert ".screen-pair dt" not in responsive_css
+    assert ".screen-pair dd" not in responsive_css
+
+
+@pytest.mark.parametrize("line_count", [1, 2, 10, 30, 100])
 def test_all_invoice_lines_are_rendered_in_xml_order(
     local_client: tuple[FlaskClient, str], line_count: int
 ) -> None:
@@ -95,11 +172,111 @@ def test_all_invoice_lines_are_rendered_in_xml_order(
     response = _render(client, csrf_token, _invoice_with_lines(line_count))
 
     assert response.status_code == 200
-    html = response.get_json()["invoice_html"]
+    html = _screen_markup(response.get_json()["invoice_html"])
     positions = [html.index(f"Articol {index:03}") for index in range(1, line_count + 1)]
     assert positions == sorted(positions)
     assert html.count("<tbody>") == 1
     assert html.count("<tr>") == line_count + 1
+
+
+def test_line_tax_category_is_displayed_once_in_the_tax_column(
+    local_client: tuple[FlaskClient, str],
+) -> None:
+    client, csrf_token = local_client
+    xml = _invoice_with_lines(1)
+    xml = re.sub(
+        rb"<cac:ClassifiedTaxCategory>.*?</cac:ClassifiedTaxCategory>",
+        b'<cac:ClassifiedTaxCategory>\n'
+        b'  <cbc:ID schemeID="SYN-CAT">S</cbc:ID>\n'
+        b"  <cbc:Name>Categorie sintetica</cbc:Name>\n"
+        b'  <cbc:Percent unitCode="SYN-PERCENT">19</cbc:Percent>\n'
+        b'  <cbc:TaxExemptionReasonCode listID="LIST-ATTR-SYN">SYN-REASON-CODE</cbc:TaxExemptionReasonCode>\n'
+        b"  <cbc:TaxExemptionReason>Motiv sintetic</cbc:TaxExemptionReason>\n"
+        b'  <cac:TaxScheme><cbc:ID schemeID="SYN-SCHEME">VAT-SYN</cbc:ID>'
+        b"<cbc:Name>Schema fiscala sintetica</cbc:Name>"
+        b'<cbc:TaxTypeCode schemeID="SYN-TYPE">VAT-TYPE-SYN</cbc:TaxTypeCode></cac:TaxScheme>\n'
+        b"</cac:ClassifiedTaxCategory>",
+        xml,
+        count=1,
+        flags=re.DOTALL,
+    )
+    html = _render(client, csrf_token, xml).get_json()["invoice_html"]
+    screen_html = _screen_markup(html)
+    print_html = _print_markup(html)
+
+    assert screen_html.count('aria-label="Categorie TVA linie"') == 1
+    assert print_html.count('class="print-tax-category"') == 1
+    for value in (
+        "SYN-CAT",
+        "Categorie sintetica",
+        "19",
+        "SYN-PERCENT",
+        "SYN-REASON-CODE",
+        "Motiv sintetic",
+        "LIST-ATTR-SYN",
+        "VAT-SYN",
+        "SYN-SCHEME",
+        "Schema fiscala sintetica",
+        "VAT-TYPE-SYN",
+        "SYN-TYPE",
+    ):
+        assert screen_html.count(value) == 1
+        assert print_html.count(value) == 1
+    assert "screen-tax-category" in screen_html
+    assert "Cod categorie" not in screen_html
+
+
+def test_screen_line_keeps_item_codes_and_line_tax_data_without_repeating_same_category(
+    local_client: tuple[FlaskClient, str],
+) -> None:
+    client, csrf_token = local_client
+    xml = _invoice_with_lines(1)
+    line_tax = b"""<cac:TaxTotal>
+      <cbc:TaxAmount currencyID="RON">1.9000</cbc:TaxAmount>
+      <cbc:RoundingAmount currencyID="RON">0.0000</cbc:RoundingAmount>
+      <cac:TaxSubtotal>
+        <cbc:TaxableAmount currencyID="RON">10.0000</cbc:TaxableAmount>
+        <cbc:TaxAmount currencyID="RON">1.9000</cbc:TaxAmount>
+        <cbc:CalculationSequenceNumeric>1</cbc:CalculationSequenceNumeric>
+        <cbc:TransactionCurrencyTaxAmount currencyID="EUR">0.9500</cbc:TransactionCurrencyTaxAmount>
+        <cbc:Percent>19.00</cbc:Percent>
+        <cbc:BaseUnitMeasure unitCode="C62">2.000</cbc:BaseUnitMeasure>
+        <cbc:PerUnitAmount currencyID="RON">0.1000</cbc:PerUnitAmount>
+        <cbc:TierRange>SYN-TIER-RANGE</cbc:TierRange>
+        <cbc:TierRatePercent>2.00</cbc:TierRatePercent>
+        <cac:TaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>19</cbc:Percent>
+          <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+        </cac:TaxCategory>
+      </cac:TaxSubtotal>
+    </cac:TaxTotal>"""
+    xml = xml.replace(b"    <cac:Item>", line_tax + b"\n    <cac:Item>", 1)
+    xml = xml.replace(
+        b"<cbc:Name>Articol 001</cbc:Name>",
+        b"<cbc:Name>Articol 001</cbc:Name>"
+        b'<cac:SellersItemIdentification><cbc:ID schemeID="SUP">SUP-CODE-01</cbc:ID></cac:SellersItemIdentification>'
+        b'<cac:StandardItemIdentification><cbc:ID schemeID="STD">STD-CODE-01</cbc:ID></cac:StandardItemIdentification>',
+        1,
+    )
+    html = _screen_markup(_render(client, csrf_token, xml).get_json()["invoice_html"])
+
+    for value in (
+        "SUP-CODE-01",
+        "STD-CODE-01",
+        "schemeID=SUP",
+        "schemeID=STD",
+        "1.9000",
+        "0.0000",
+        "10.0000",
+        "0.9500",
+        "19.00",
+        "2.000",
+        "C62",
+        "0.1000",
+        "SYN-TIER-RANGE",
+        "2.00",
+    ):
+        assert value in html
+    assert html.count('aria-label="Categorie TVA linie"') == 1
 
 
 def test_absent_optional_sections_are_omitted_without_placeholder_values(
@@ -174,25 +351,209 @@ def test_repeated_tax_subtotals_totals_payment_means_and_delivery_are_rendered(
   </cac:DeliveryLocation>
 </cac:Delivery>
 """.encode("utf-8")
-    xml = _append_invoice_children(_invoice_with_lines(1), extra)
-    html = _render(client, csrf_token, xml).get_json()["invoice_html"]
+    xml = _append_invoice_children(_invoice_with_lines(2), extra)
+    rendered = _render(client, csrf_token, xml).get_json()["invoice_html"]
+    html = _screen_markup(rendered)
+    print_html = _print_markup(rendered)
 
     assert "Total TVA 1" in html
-    assert "Subtotal TVA 1" in html
-    assert "Subtotal TVA 2" in html
+    assert "Subtotal 1" in html
+    assert "Subtotal 2" in html
     assert "8.5000" in html
     assert "25.0000" in html
     assert "TVA în moneda tranzacției" in html
     assert "Interval de tier" in html
     assert "12.00" in html
+    assert re.search(
+        r'class="screen-value">\s*8\.5000\s*</span>\s*<span class="screen-unit">RON</span>', html
+    )
     assert "De plată" in html
     assert html.count("Mijloc de plată ") == 2
     assert "RO00SYNTHETIC0000000001" in html
     assert "BANK-SYN" in html
     assert "REF-SYN-1" in html and "REF-SYN-2" in html
+    assert html.count('class="screen-record screen-payment"') == 2
+    assert 'class="screen-total-band"' in html
+    assert 'class="screen-total screen-payable"' in html
+    assert 'class="screen-tax-table"' in html
+    assert 'class="screen-bottom-grid"' in html
     assert "Destinatar sintetic" in html
     assert "Depozit sintetic" in html
     assert "Brașov" in html
+    for label in (
+        "Număr",
+        "Denumire",
+        "ID fiscal",
+        "Telefon",
+        "Stradă",
+        "Localitate",
+        "Cod mijloc de plată",
+        "IBAN / ID cont",
+        "Data livrării",
+        "Descriere locație",
+    ):
+        assert re.search(
+            rf'<div class="screen-pair"><dt>{re.escape(label)}</dt><dd>.*?</dd></div>',
+            html,
+            re.DOTALL,
+        )
+    assert re.search(
+        r'<span class="screen-total-label">De plată</span>\s*'
+        r'<span class="screen-total-value">.*?</span>',
+        html,
+        re.DOTALL,
+    )
+    assert re.search(
+        r'<span class="screen-detail"><strong>Interval de tier:</strong>\s*'
+        r'<span class="screen-value">.*?</span>',
+        html,
+        re.DOTALL,
+    )
+
+    document = lxml_html.fromstring(html)
+    pair_fields = document.xpath('.//div[@class="screen-pair"]')
+    pairs_by_label: dict[str, list] = {}
+    for pair in pair_fields:
+        assert len(pair) == 2
+        assert pair[0].tag == "dt"
+        assert pair[1].tag == "dd"
+        assert pair[0].tail is None
+        assert pair[1].text is None
+        pairs_by_label.setdefault(pair[0].text_content(), []).append(pair)
+    for label in (
+        "Număr",
+        "Denumire",
+        "ID fiscal",
+        "Telefon",
+        "Stradă",
+        "Localitate",
+        "Cod mijloc de plată",
+        "IBAN / ID cont",
+        "Data livrării",
+        "Descriere locație",
+    ):
+        assert label in pairs_by_label
+        assert pairs_by_label[label][0][1][0].tag == "span"
+
+    payable = document.xpath('.//div[contains(concat(" ", normalize-space(@class), " "), " screen-payable ")]')[0]
+    assert [child.tag for child in payable] == ["span", "span"]
+    assert "screen-total-label" in payable[0].get("class", "")
+    assert "screen-total-value" in payable[1].get("class", "")
+    tier_detail = document.xpath('.//span[@class="screen-detail"][strong="Interval de tier:"]')[0]
+    assert tier_detail[0].tag == "strong"
+    assert tier_detail[0].tail == " "
+    assert tier_detail[1].tag == "span"
+    assert "screen-value" in tier_detail[1].get("class", "")
+
+    item_codes = document.xpath('.//div[@class="screen-item-code"]')
+    assert item_codes
+    assert all(not code.xpath(".//br") for code in item_codes)
+    assert any(
+        code.text_content().startswith("Bază:")
+        and code.xpath('./span[contains(concat(" ", normalize-space(@class), " "), " screen-value ")]')
+        for code in item_codes
+    )
+    for value in (
+        "Articol 001",
+        "Articol 002",
+        "8.5000",
+        "25.0000",
+        "4.7500",
+        "1.2500",
+        "TVA în moneda tranzacției",
+        "19.00",
+        "2.000",
+        "C62",
+        "0.5000",
+        "treapta sintetică",
+        "2.50",
+        "Standard",
+        "TVA sintetic",
+        "12.00",
+        "10.00",
+        "11.00",
+        "1.00",
+        "2.00",
+        "3.00",
+        "0.01",
+        "0.0000",
+        "Scutire sintetică",
+        "INSTR-SYN",
+        "Plată sintetică",
+        "IBAN",
+        "Cont sintetic",
+        "Sucursală sintetică",
+        "BR-SYN",
+        "RO00SYNTHETIC0000000001",
+        "BANK-SYN",
+        "REF-SYN-1",
+        "REF-SYN-2",
+        "2026-02-01",
+        "2026-01-20",
+        "09:30:00",
+        "Destinatar sintetic",
+        "LOC-SYN",
+        "Depozit sintetic",
+        "Brașov",
+        "RO",
+    ):
+        assert value in html
+
+    for value in (
+        "Articol 001",
+        "Articol 002",
+        "8.5000",
+        "25.0000",
+        "4.7500",
+        "1.2500",
+        "TVA moneda tranzacției",
+        "2.000",
+        "C62",
+        "0.5000",
+        "treapta sintetică",
+        "2.50",
+        "0.0000",
+        "Standard",
+        "Scutire sintetică",
+        "TVA sintetic",
+        "10.00",
+        "11.00",
+        "12.00",
+        "1.00",
+        "2.00",
+        "3.00",
+        "0.01",
+        "REF-SYN-1",
+        "REF-SYN-2",
+        "INSTR-SYN",
+        "Plată sintetică",
+        "IBAN",
+        "Cont sintetic",
+        "Sucursală sintetică",
+        "BR-SYN",
+        "RO00SYNTHETIC0000000001",
+        "BANK-SYN",
+        "2026-02-01",
+        "2026-01-20",
+        "09:30:00",
+        "Destinatar sintetic",
+        "LOC-SYN",
+        "Depozit sintetic",
+        "Brașov",
+        "RO",
+    ):
+        assert value in print_html
+    assert print_html.count("Articol 001") == 1
+    assert print_html.count("Articol 002") == 1
+    assert print_html.count("REF-SYN-1") == 1
+    assert print_html.count("REF-SYN-2") == 1
+    assert print_html.count("Subtotal 1:") == 1
+    assert print_html.count("Subtotal 2:") == 1
+    assert print_html.count("Mijloc 1") == 1
+    assert print_html.count("Mijloc 2") == 1
+    assert print_html.count("8.5000") == 1
+    assert re.search(r'class="print-money">\s*8\.5000\s*<span class="print-currency">RON</span>', print_html)
+    assert re.search(r'class="print-money">\s*12\.00\s*<span class="print-currency">RON</span>', print_html)
 
 
 def test_decimal_text_diacritics_and_long_descriptions_are_preserved_and_escaped(
@@ -209,12 +570,31 @@ def test_decimal_text_diacritics_and_long_descriptions_are_preserved_and_escaped
     )
     xml = xml.replace(b">10.00</cbc:LineExtensionAmount>", b"> 0010.2300 </cbc:LineExtensionAmount>")
     html = _render(client, csrf_token, xml).get_json()["invoice_html"]
+    print_html = _print_markup(html)
 
     assert "0010.2300" in html
     assert "Descriere lungă cu diacritice: ăîșțâ" in html
     assert "detaliu sintetic" in html
     assert "&lt;script&gt;alert(&#39;synthetic&#39;)&lt;/script&gt;" in html
     assert "<script>alert('synthetic')</script>" not in html
+    assert "0010.2300" in print_html
+    assert "Descriere lungă cu diacritice: ăîșțâ" in print_html
+    assert "&lt;script&gt;alert(&#39;synthetic&#39;)&lt;/script&gt;" in print_html
+    assert "<script>alert('synthetic')</script>" not in print_html
+
+
+@pytest.mark.parametrize("line_count", [1, 10, 30, 100])
+def test_print_layout_renders_every_synthetic_line_in_order(
+    local_client: tuple[FlaskClient, str], line_count: int
+) -> None:
+    client, csrf_token = local_client
+    rendered = _render(client, csrf_token, _invoice_with_lines(line_count)).get_json()["invoice_html"]
+    print_html = _print_markup(rendered)
+
+    positions = [print_html.index(f"Articol {index:03}") for index in range(1, line_count + 1)]
+    assert positions == sorted(positions)
+    assert print_html.count("<tbody>") == 1
+    assert print_html.count("<tr>") == line_count + 1
 
 
 def test_new_upload_replaces_old_invoice_and_old_content_is_not_kept_in_session(

@@ -1,0 +1,142 @@
+{% import "_invoice_macros.html" as ui %}
+<article class="print-invoice" aria-labelledby="print-invoice-title">
+  <header class="print-header">
+    <section class="print-party" aria-label="Furnizor">
+      {{ ui.print_party(invoice.supplier, 'Furnizor') }}
+    </section>
+    <section class="print-title">
+      <h1 id="print-invoice-title">Factură</h1>
+      {{ ui.print_field('Număr', invoice.invoice_id) }}
+      {{ ui.print_field('Tip', invoice.invoice_type_code) }}
+      {{ ui.print_field('Emisă', invoice.issue_date) }}
+      {{ ui.print_field('Scadență', invoice.due_date) }}
+      {{ ui.print_field('Monedă', invoice.document_currency_code) }}
+      {{ ui.print_field('Monedă TVA', invoice.tax_currency_code) }}
+    </section>
+    <section class="print-party" aria-label="Client">
+      {{ ui.print_party(invoice.customer, 'Client') }}
+    </section>
+  </header>
+
+  {% if invoice.legal_monetary_total %}
+    <section class="print-section print-totals" aria-labelledby="print-totals-heading">
+      <h2 id="print-totals-heading">Totaluri</h2>
+      <table>
+        <tbody>
+          <tr>
+            {% set totals = [
+              ('Net linii', invoice.legal_monetary_total.line_extension_amount),
+              ('Fără TVA', invoice.legal_monetary_total.tax_exclusive_amount),
+              ('Cu TVA', invoice.legal_monetary_total.tax_inclusive_amount),
+              ('Reduceri', invoice.legal_monetary_total.allowance_total_amount),
+              ('Costuri', invoice.legal_monetary_total.charge_total_amount),
+              ('Avans', invoice.legal_monetary_total.prepaid_amount),
+              ('Rotunjire', invoice.legal_monetary_total.payable_rounding_amount),
+              ('De plată', invoice.legal_monetary_total.payable_amount)
+            ] %}
+            {% for label, amount in totals if amount is not none %}
+              <td{% if label == 'De plată' %} class="print-payable"{% endif %}>
+                <span class="print-total-label">{{ label }}</span>
+                {{ ui.print_money(amount) }}
+              </td>
+            {% endfor %}
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  {% endif %}
+
+  {% if invoice.tax_totals %}
+    <section class="print-section print-tax" aria-labelledby="print-tax-heading">
+      <h2 id="print-tax-heading">TVA</h2>
+      {% for total in invoice.tax_totals %}
+        {{ ui.print_tax_total(total, loop.index) }}
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  <section class="print-section print-lines" aria-labelledby="print-lines-heading">
+    <h2 id="print-lines-heading">Linii factură</h2>
+    <table class="print-line-table">
+      <thead>
+        <tr>
+          <th scope="col">Nr.</th>
+          <th scope="col">Denumire, descriere și cod</th>
+          <th scope="col">Cantitate</th>
+          <th scope="col">Preț unitar</th>
+          <th scope="col">Valoare netă</th>
+          <th scope="col">TVA</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for line in invoice.lines %}
+          <tr>
+            <td>{{ ui.print_value(line.id) }}</td>
+            <td>
+              {% for name in line.item.names %}{{ ui.print_value(name) }}{% endfor %}
+              {% for description in line.item.descriptions %}{{ ui.print_value(description) }}{% endfor %}
+              {% if line.item.sellers_item_identification %}{{ ui.print_field('Cod furnizor', line.item.sellers_item_identification.id) }}{% endif %}
+              {% if line.item.standard_item_identification %}{{ ui.print_field('Cod standard', line.item.standard_item_identification.id) }}{% endif %}
+              {% for total in line.tax_totals %}{{ ui.print_tax_total(total, loop.index, 'TVA linie') }}{% endfor %}
+            </td>
+            <td>{{ ui.print_quantity('Cantitate', line.invoiced_quantity) }}</td>
+            <td>
+              {% if line.price %}
+                {{ ui.print_amount('Preț', line.price.price_amount) }}
+                {{ ui.print_quantity('Bază', line.price.base_quantity) }}
+              {% endif %}
+            </td>
+            <td>{{ ui.print_amount('Net', line.line_extension_amount) }}</td>
+            <td>
+              {% for category in line.item.classified_tax_categories %}{{ ui.print_tax_category(category) }}{% endfor %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  {% if invoice.payment_means or invoice.deliveries %}
+    <div class="print-bottom-grid">
+      {% if invoice.payment_means %}
+        <section class="print-section print-payments" aria-labelledby="print-payment-heading">
+          <h2 id="print-payment-heading">Plată</h2>
+          {% for payment in invoice.payment_means %}
+            <div class="print-detail-row">
+              <strong>Mijloc {{ loop.index }}</strong>
+              {{ ui.print_field('Cod', payment.payment_means_code) }}
+              {{ ui.print_field('Scadență plată', payment.payment_due_date) }}
+              {{ ui.print_field('Canal', payment.payment_channel_code) }}
+              {{ ui.print_field('Instrucțiune', payment.instruction_id) }}
+              {% for note in payment.instruction_notes %}{{ ui.print_field('Notă plată', note) }}{% endfor %}
+              {% for payment_id in payment.payment_ids %}{{ ui.print_field('Referință', payment_id) }}{% endfor %}
+              {{ ui.print_account(payment.payee_financial_account, 'Cont beneficiar') }}
+              {{ ui.print_account(payment.payer_financial_account, 'Cont plătitor') }}
+            </div>
+          {% endfor %}
+        </section>
+      {% endif %}
+
+      {% if invoice.deliveries %}
+        <section class="print-section print-deliveries" aria-labelledby="print-delivery-heading">
+          <h2 id="print-delivery-heading">Livrare</h2>
+          {% for delivery in invoice.deliveries %}
+            <div class="print-detail-row">
+              <strong>Livrare {{ loop.index }}</strong>
+              {{ ui.print_field('Data', delivery.actual_delivery_date) }}
+              {{ ui.print_field('Ora', delivery.actual_delivery_time) }}
+              {% if delivery.delivery_party %}
+                {{ ui.print_party(delivery.delivery_party, 'Destinatar') }}
+              {% endif %}
+              {% if delivery.delivery_location %}
+                {{ ui.print_field('ID locație', delivery.delivery_location.id) }}
+                {% for description in delivery.delivery_location.descriptions %}{{ ui.print_field('Descriere locație', description) }}{% endfor %}
+                {% if delivery.delivery_location.address %}{{ ui.print_address(delivery.delivery_location.address, 'Adresă livrare') }}{% endif %}
+              {% endif %}
+            </div>
+          {% endfor %}
+        </section>
+      {% endif %}
+    </div>
+  {% endif %}
+</article>
