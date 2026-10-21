@@ -59,6 +59,18 @@ def _render(client: FlaskClient, csrf_token: str, xml: bytes):
     )
 
 
+def _screen_markup(html: str) -> str:
+    screen, marker, _print = html.partition('<div class="invoice-print">')
+    assert marker
+    return screen
+
+
+def _print_markup(html: str) -> str:
+    _screen, marker, printed = html.partition('<div class="invoice-print">')
+    assert marker
+    return printed
+
+
 def test_invoice_rendering_shows_header_parties_and_distinct_identifiers(
     local_client: tuple[FlaskClient, str],
 ) -> None:
@@ -73,6 +85,7 @@ def test_invoice_rendering_shows_header_parties_and_distinct_identifiers(
     assert response.status_code == 200
     payload = response.get_json()
     html = payload["invoice_html"]
+    print_html = _print_markup(html)
     assert payload["ok"] is True
     assert "SYN-INV-001" in html
     assert "schemeID: INV" in html
@@ -84,6 +97,10 @@ def test_invoice_rendering_shows_header_parties_and_distinct_identifiers(
     assert "RO-SYN-002" in html
     assert "Identificare comercială" in html
     assert "Identificator fiscal" in html
+    assert "Furnizor" in print_html
+    assert "Client" in print_html
+    assert print_html.count("RO-SYN-001") == 1
+    assert print_html.count("RO-SYN-002") == 1
     assert response.headers["Cache-Control"] == "no-store"
 
 
@@ -95,7 +112,7 @@ def test_all_invoice_lines_are_rendered_in_xml_order(
     response = _render(client, csrf_token, _invoice_with_lines(line_count))
 
     assert response.status_code == 200
-    html = response.get_json()["invoice_html"]
+    html = _screen_markup(response.get_json()["invoice_html"])
     positions = [html.index(f"Articol {index:03}") for index in range(1, line_count + 1)]
     assert positions == sorted(positions)
     assert html.count("<tbody>") == 1
@@ -124,8 +141,11 @@ def test_line_tax_category_is_displayed_once_in_the_tax_column(
         flags=re.DOTALL,
     )
     html = _render(client, csrf_token, xml).get_json()["invoice_html"]
+    screen_html = _screen_markup(html)
+    print_html = _print_markup(html)
 
-    assert html.count('aria-label="Categorie TVA linie"') == 1
+    assert screen_html.count('aria-label="Categorie TVA linie"') == 1
+    assert print_html.count('class="print-tax-category"') == 1
     for value in (
         "SYN-CAT",
         "Categorie sintetica",
@@ -140,9 +160,10 @@ def test_line_tax_category_is_displayed_once_in_the_tax_column(
         "VAT-TYPE-SYN",
         "SYN-TYPE",
     ):
-        assert html.count(value) == 1
-    assert "tax-compact-category" in html
-    assert "Cod categorie" not in html
+        assert screen_html.count(value) == 1
+        assert print_html.count(value) == 1
+    assert "tax-compact-category" in screen_html
+    assert "Cod categorie" not in screen_html
 
 
 def test_absent_optional_sections_are_omitted_without_placeholder_values(
@@ -217,8 +238,10 @@ def test_repeated_tax_subtotals_totals_payment_means_and_delivery_are_rendered(
   </cac:DeliveryLocation>
 </cac:Delivery>
 """.encode("utf-8")
-    xml = _append_invoice_children(_invoice_with_lines(1), extra)
-    html = _render(client, csrf_token, xml).get_json()["invoice_html"]
+    xml = _append_invoice_children(_invoice_with_lines(2), extra)
+    rendered = _render(client, csrf_token, xml).get_json()["invoice_html"]
+    html = _screen_markup(rendered)
+    print_html = _print_markup(rendered)
 
     assert "Total TVA 1" in html
     assert "Subtotal TVA 1" in html
@@ -243,6 +266,62 @@ def test_repeated_tax_subtotals_totals_payment_means_and_delivery_are_rendered(
     assert "Depozit sintetic" in html
     assert "Brașov" in html
 
+    for value in (
+        "Articol 001",
+        "Articol 002",
+        "8.5000",
+        "25.0000",
+        "4.7500",
+        "1.2500",
+        "TVA moneda tranzacției",
+        "2.000",
+        "C62",
+        "0.5000",
+        "treapta sintetică",
+        "2.50",
+        "0.0000",
+        "Standard",
+        "Scutire sintetică",
+        "TVA sintetic",
+        "10.00",
+        "11.00",
+        "12.00",
+        "1.00",
+        "2.00",
+        "3.00",
+        "0.01",
+        "REF-SYN-1",
+        "REF-SYN-2",
+        "INSTR-SYN",
+        "Plată sintetică",
+        "IBAN",
+        "Cont sintetic",
+        "Sucursală sintetică",
+        "BR-SYN",
+        "RO00SYNTHETIC0000000001",
+        "BANK-SYN",
+        "2026-02-01",
+        "2026-01-20",
+        "09:30:00",
+        "Destinatar sintetic",
+        "LOC-SYN",
+        "Depozit sintetic",
+        "Brașov",
+        "RO",
+    ):
+        assert value in print_html
+    assert print_html.count("Articol 001") == 1
+    assert print_html.count("Articol 002") == 1
+    assert print_html.count("REF-SYN-1") == 1
+    assert print_html.count("REF-SYN-2") == 1
+    assert print_html.count("Subtotal 1:") == 1
+    assert print_html.count("Subtotal 2:") == 1
+    assert print_html.count("Mijloc 1") == 1
+    assert print_html.count("Mijloc 2") == 1
+    assert print_html.count("8.5000") == 1
+    assert re.search(r'class="print-money">\s*8\.5000\s*<span class="print-currency">RON</span>', print_html)
+    assert re.search(r'class="print-money">\s*12\.00\s*<span class="print-currency">RON</span>', print_html)
+
 
 def test_decimal_text_diacritics_and_long_descriptions_are_preserved_and_escaped(
     local_client: tuple[FlaskClient, str],
@@ -258,12 +337,31 @@ def test_decimal_text_diacritics_and_long_descriptions_are_preserved_and_escaped
     )
     xml = xml.replace(b">10.00</cbc:LineExtensionAmount>", b"> 0010.2300 </cbc:LineExtensionAmount>")
     html = _render(client, csrf_token, xml).get_json()["invoice_html"]
+    print_html = _print_markup(html)
 
     assert "0010.2300" in html
     assert "Descriere lungă cu diacritice: ăîșțâ" in html
     assert "detaliu sintetic" in html
     assert "&lt;script&gt;alert(&#39;synthetic&#39;)&lt;/script&gt;" in html
     assert "<script>alert('synthetic')</script>" not in html
+    assert "0010.2300" in print_html
+    assert "Descriere lungă cu diacritice: ăîșțâ" in print_html
+    assert "&lt;script&gt;alert(&#39;synthetic&#39;)&lt;/script&gt;" in print_html
+    assert "<script>alert('synthetic')</script>" not in print_html
+
+
+@pytest.mark.parametrize("line_count", [1, 10, 30, 100])
+def test_print_layout_renders_every_synthetic_line_in_order(
+    local_client: tuple[FlaskClient, str], line_count: int
+) -> None:
+    client, csrf_token = local_client
+    rendered = _render(client, csrf_token, _invoice_with_lines(line_count)).get_json()["invoice_html"]
+    print_html = _print_markup(rendered)
+
+    positions = [print_html.index(f"Articol {index:03}") for index in range(1, line_count + 1)]
+    assert positions == sorted(positions)
+    assert print_html.count("<tbody>") == 1
+    assert print_html.count("<tr>") == line_count + 1
 
 
 def test_new_upload_replaces_old_invoice_and_old_content_is_not_kept_in_session(

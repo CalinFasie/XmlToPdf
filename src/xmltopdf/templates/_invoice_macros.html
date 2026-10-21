@@ -205,3 +205,162 @@
     </section>
   {% endif %}
 {%- endmacro %}
+
+{% macro print_value(item) -%}
+  {% if item is not none and (item.value is not none or item.attributes) %}
+    <span class="print-value">
+      {% if item.value is not none %}{{ item.value }}{% endif %}
+      {% for attribute in item.attributes %}<span class="print-attribute">{{ attribute.name }}={{ attribute.value }}</span>{% endfor %}
+    </span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro print_field(label, item) -%}
+  {% if item is not none and (item.value is not none or item.attributes) %}
+    <span class="print-field"><strong>{{ label }}:</strong> {{ print_value(item) }}</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro print_money(item) -%}
+  {% if item is not none and (item.value is not none or item.currency_id or item.attributes) %}
+    <span class="print-money">
+      {% if item.value is not none %}{{ item.value }}{% endif %}
+      {% if item.currency_id %}<span class="print-currency">{{ item.currency_id }}</span>{% endif %}
+      {% for attribute in item.attributes if attribute.name != 'currencyID' %}<span class="print-attribute">{{ attribute.name }}={{ attribute.value }}</span>{% endfor %}
+    </span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro print_amount(label, item) -%}
+  {% if item is not none and (item.value is not none or item.currency_id or item.attributes) %}
+    <span class="print-field"><strong>{{ label }}:</strong> {{ print_money(item) }}</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro print_quantity(label, item) -%}
+  {% if item is not none and (item.value is not none or item.unit_code or item.attributes) %}
+    <span class="print-field">
+      <strong>{{ label }}:</strong>
+      {% if item.value is not none %}{{ item.value }}{% endif %}
+      {% if item.unit_code %}<span class="print-unit">{{ item.unit_code }}</span>{% endif %}
+      {% for attribute in item.attributes if attribute.name != 'unitCode' %}<span class="print-attribute">{{ attribute.name }}={{ attribute.value }}</span>{% endfor %}
+    </span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro print_address(address, heading='Adresă') -%}
+  {% if address is not none %}
+    <div class="print-record">
+      <strong>{{ heading }}:</strong>
+      {{ print_field('ID adresă', address.id) }}
+      {{ print_field('Stradă', address.street_name) }}
+      {{ print_field('Stradă suplimentară', address.additional_street_name) }}
+      {{ print_field('Număr', address.building_number) }}
+      {{ print_field('Localitate', address.city_name) }}
+      {{ print_field('Cod poștal', address.postal_zone) }}
+      {{ print_field('Județ / regiune', address.country_subentity) }}
+      {% for line in address.address_lines %}{{ print_field('Detaliu adresă', line) }}{% endfor %}
+      {% if address.country %}
+        {{ print_field('Cod țară', address.country.identification_code) }}
+        {{ print_field('Țară', address.country.name) }}
+      {% endif %}
+    </div>
+  {% endif %}
+{%- endmacro %}
+
+{% macro print_contact(contact) -%}
+  <div class="print-record">
+    <strong>Contact:</strong>
+    {{ print_field('ID', contact.id) }}
+    {{ print_field('Persoană', contact.name) }}
+    {{ print_field('Telefon', contact.telephone) }}
+    {{ print_field('Fax', contact.telefax) }}
+    {{ print_field('E-mail', contact.electronic_mail) }}
+    {{ print_field('Notă', contact.note) }}
+  </div>
+{%- endmacro %}
+
+{% macro print_party(party, heading=None) -%}
+  {% if party is not none %}
+    <div class="print-party-content">
+      {% if heading %}<h2>{{ heading }}</h2>{% endif %}
+      {% for name in party.party_names %}<div class="print-party-name">{{ print_value(name) }}</div>{% endfor %}
+      {% for endpoint in party.endpoint_ids %}{{ print_field('Endpoint electronic', endpoint) }}{% endfor %}
+      {% for identification in party.identifications %}{{ print_field('ID comercial', identification.id) }}{% endfor %}
+      {% for entity in party.legal_entities %}
+        {{ print_field('Denumire legală', entity.registration_name) }}
+        {{ print_field('ID companie', entity.company_id) }}
+        {{ print_field('Formă juridică', entity.company_legal_form) }}
+        {{ print_field('Cod formă juridică', entity.company_legal_form_code) }}
+      {% endfor %}
+      {% for tax_scheme in party.tax_schemes %}
+        {{ print_field('ID fiscal', tax_scheme.company_id) }}
+        {% if tax_scheme.tax_scheme %}
+          {{ print_field('Schemă fiscală ID', tax_scheme.tax_scheme.id) }}
+          {{ print_field('Schemă fiscală denumire', tax_scheme.tax_scheme.name) }}
+          {{ print_field('Tip taxă', tax_scheme.tax_scheme.tax_type_code) }}
+        {% endif %}
+      {% endfor %}
+      {% for address in party.postal_addresses %}{{ print_address(address) }}{% endfor %}
+      {% for contact in party.contacts %}{{ print_contact(contact) }}{% endfor %}
+    </div>
+  {% endif %}
+{%- endmacro %}
+
+{% macro print_tax_scheme(scheme) -%}
+  {% if scheme is not none %}
+    {{ print_field('Schemă ID', scheme.id) }}
+    {{ print_field('Schemă denumire', scheme.name) }}
+    {{ print_field('Tip taxă', scheme.tax_type_code) }}
+  {% endif %}
+{%- endmacro %}
+
+{% macro print_tax_category(category) -%}
+  {% if category is not none %}
+    <span class="print-tax-category">
+      {{ print_field('Categorie', category.id) }}
+      {{ print_field('Denumire categorie', category.name) }}
+      {{ print_field('% TVA', category.percent) }}
+      {{ print_field('Cod motiv scutire', category.tax_exemption_reason_code) }}
+      {% for reason in category.tax_exemption_reasons %}{{ print_field('Motiv scutire', reason) }}{% endfor %}
+      {{ print_tax_scheme(category.tax_scheme) }}
+    </span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro print_tax_total(total, index, heading='Total TVA') -%}
+  <div class="print-tax-total">
+    <strong>{{ heading }} {{ index }}:</strong>
+    {{ print_amount('TVA', total.tax_amount) }}
+    {{ print_amount('Rotunjire TVA', total.rounding_amount) }}
+    {% for subtotal in total.subtotals %}
+      <div class="print-tax-subtotal">
+        <strong>Subtotal {{ loop.index }}:</strong>
+        {{ print_amount('Bază', subtotal.taxable_amount) }}
+        {{ print_amount('TVA', subtotal.tax_amount) }}
+        {{ print_field('Ordine calcul', subtotal.calculation_sequence_numeric) }}
+        {{ print_amount('TVA moneda tranzacției', subtotal.transaction_currency_tax_amount) }}
+        {{ print_field('% subtotal', subtotal.percent) }}
+        {{ print_quantity('Măsură bază', subtotal.base_unit_measure) }}
+        {{ print_amount('Valoare/unitate', subtotal.per_unit_amount) }}
+        {{ print_field('Interval tier', subtotal.tier_range) }}
+        {{ print_field('% tier', subtotal.tier_rate_percent) }}
+        {{ print_tax_category(subtotal.tax_category) }}
+      </div>
+    {% endfor %}
+  </div>
+{%- endmacro %}
+
+{% macro print_account(account, heading) -%}
+  {% if account is not none %}
+    <span class="print-account"><strong>{{ heading }}:</strong>
+      {{ print_field('IBAN / ID cont', account.id) }}
+      {{ print_field('Denumire cont', account.name) }}
+      {{ print_field('Tip cont', account.account_type_code) }}
+      {{ print_field('Monedă cont', account.currency_code) }}
+      {{ print_field('Instituție financiară', account.financial_institution_id) }}
+      {{ print_field('ID sucursală', account.branch_id) }}
+      {{ print_field('Denumire sucursală', account.branch_name) }}
+    </span>
+  {% endif %}
+{%- endmacro %}

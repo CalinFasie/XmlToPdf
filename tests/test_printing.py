@@ -53,6 +53,9 @@ def test_print_control_is_rendered_only_for_an_accepted_invoice(
     assert 'type="button"' in invoice_html
     assert 'data-action="print"' in invoice_html
     assert "Tipărește / Salvează PDF" in invoice_html
+    assert '<div class="invoice-screen">' in invoice_html
+    assert '<div class="invoice-print">' in invoice_html
+    assert '<article class="print-invoice"' in invoice_html
 
 
 def test_print_requires_an_explicit_click_and_upload_clears_previous_invoice(
@@ -86,7 +89,7 @@ def test_print_css_sets_a4_landscape_and_hides_web_controls() -> None:
     css = CSS_PATH.read_text(encoding="utf-8")
     print_css = css[css.index("@media print"):]
 
-    assert re.search(r"@page\s*\{\s*size:\s*A4 landscape;\s*margin:\s*10mm;", css, re.IGNORECASE)
+    assert re.search(r"@page\s*\{\s*size:\s*A4 landscape;\s*margin:\s*8mm;", css, re.IGNORECASE)
     assert re.search(
         r"\.app-header,\s*\.upload-panel,\s*#upload-status,\s*\.invoice-actions\s*\{\s*display:\s*none",
         print_css,
@@ -94,12 +97,13 @@ def test_print_css_sets_a4_landscape_and_hides_web_controls() -> None:
     )
     assert re.search(r"background:\s*#fff\s*!important;", print_css)
     assert "box-shadow: none;" in print_css
+    assert re.search(r"\.invoice-screen\s*\{\s*display:\s*none\s*!important;", print_css)
+    assert re.search(r"\.invoice-print\s*\{\s*display:\s*block\s*!important;", print_css)
 
 
 def test_print_css_uses_white_background_and_readable_type() -> None:
     css = CSS_PATH.read_text(encoding="utf-8")
     print_index = css.index("@media print")
-    screen_css = css[:print_index]
     print_css = css[print_index:]
 
     assert re.search(r":root,\s*html,\s*body\s*\{[^}]*background:\s*#fff\s*!important", print_css)
@@ -107,15 +111,15 @@ def test_print_css_uses_white_background_and_readable_type() -> None:
     assert "font-size: 9pt;" in print_css
     assert "font-size: 8.5pt;" in print_css
     assert "print-color-adjust: economy;" in print_css
-    assert "gap: 4px 8px;" in screen_css
-    assert "gap: 0.4mm 1.2mm;" in print_css
+    assert re.search(r"\.invoice-print\s*\{\s*display:\s*none;", css)
+    assert "grid-template-columns: minmax(0, 1fr) minmax(32mm, 0.72fr) minmax(0, 1fr);" in print_css
     assert re.search(
-        r"\.invoice-lines tr\s*\{[^}]*break-inside:\s*avoid;[^}]*page-break-inside:\s*avoid",
+        r"\.print-line-table tr\s*\{[^}]*break-inside:\s*avoid;[^}]*page-break-inside:\s*avoid",
         print_css,
         re.DOTALL,
     )
     assert not re.search(
-        r"(?m)^\s*\.(?:invoice-lines|invoice-section|summary-card)\s*\{[^}]*break-inside:\s*avoid",
+        r"(?m)^\s*\.(?:print-line-table|print-section|print-bottom-grid)\s*\{[^}]*break-inside:\s*avoid",
         print_css,
         re.DOTALL,
     )
@@ -125,15 +129,11 @@ def test_print_table_fits_and_can_continue_across_pages() -> None:
     css = CSS_PATH.read_text(encoding="utf-8")
     print_css = css[css.index("@media print"):]
 
-    assert re.search(r"\.table-scroll\s*\{[^}]*overflow:\s*visible", print_css, re.DOTALL)
-    assert re.search(r"\.invoice-lines\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0", print_css, re.DOTALL)
-    assert re.search(r"\.invoice-lines thead\s*\{\s*display:\s*table-header-group", print_css)
-    assert re.search(r"\.invoice-lines\s*\{[^}]*break-inside:\s*auto", print_css, re.DOTALL)
-    assert re.search(r"\.invoice-lines tr\s*\{[^}]*break-inside:\s*avoid", print_css, re.DOTALL)
-    assert not re.search(r"\.invoice-lines[^{}]*\{[^}]*display:\s*none", print_css, re.DOTALL)
+    assert re.search(r"\.print-line-table\s*\{[^}]*width:\s*100%", print_css, re.DOTALL)
+    assert re.search(r"\.print-line-table thead\s*\{\s*display:\s*table-header-group", print_css)
+    assert re.search(r"\.print-line-table\s*\{[^}]*break-inside:\s*auto", print_css, re.DOTALL)
+    assert not re.search(r"\.print-line-table[^{}]*\{[^}]*display:\s*none", print_css, re.DOTALL)
     assert "overflow: hidden" not in print_css
     assert "max-height:" not in print_css
     assert "transform: scale" not in print_css
     assert not re.search(r"(?:min-|max-)?height:\s*\d+(?:\.\d+)?(?:px|mm|cm|in|pt)", print_css)
-    assert len(re.findall(r"^\s*break-inside:\s*avoid;", print_css, re.MULTILINE)) == 1
-    assert len(re.findall(r"^\s*page-break-inside:\s*avoid;", print_css, re.MULTILINE)) == 1

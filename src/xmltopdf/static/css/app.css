@@ -443,7 +443,11 @@ button:disabled {
 
 @page {
   size: A4 landscape;
-  margin: 10mm;
+  margin: 8mm;
+}
+
+.invoice-print {
+  display: none;
 }
 
 @media print {
@@ -458,7 +462,7 @@ button:disabled {
     background: #fff !important;
     font-family: Arial, sans-serif;
     font-size: 9pt;
-    line-height: 1.25;
+    line-height: 1.2;
     print-color-adjust: economy;
     -webkit-print-color-adjust: economy;
   }
@@ -475,356 +479,259 @@ button:disabled {
     width: 100%;
     margin: 0;
     padding: 0;
-    background-color: #fff !important;
+    background: #fff !important;
   }
 
-  .invoice {
+  .invoice-screen {
+    display: none !important;
+  }
+
+  .invoice-print {
+    display: block !important;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    color: #000;
+    background: #fff !important;
+  }
+
+  .print-invoice {
     width: 100%;
     margin: 0;
     padding: 0;
     border: 0;
     border-radius: 0;
+    color: #000;
     background: #fff !important;
     box-shadow: none;
+    font-family: Arial, sans-serif;
+    font-size: 9pt;
+    line-height: 1.15;
   }
 
-  .invoice,
-  .invoice * {
+  .print-invoice *,
+  .print-invoice *::before,
+  .print-invoice *::after {
+    box-sizing: border-box;
     background-color: #fff !important;
   }
 
-  .invoice-heading {
-    gap: 5mm;
-    padding-bottom: 2mm;
+  .print-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(32mm, 0.72fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 4mm;
+    margin-bottom: 2mm;
   }
 
-  .invoice-heading h2 {
-    color: #000;
+  .print-party,
+  .print-title {
+    min-width: 0;
+  }
+
+  .print-party-content > .print-party-name,
+  .print-party-content > .print-field,
+  .print-party-content > .print-record {
+    display: block;
+    margin: 0 0 0.5mm;
+  }
+
+  .print-party-content > .print-party-name {
+    font-size: 9.5pt;
+    font-weight: 700;
+  }
+
+  .print-party-content h2 {
+    margin: 0 0 0.5mm;
+    font-size: 8.5pt;
+  }
+
+  .print-title {
+    text-align: center;
+  }
+
+  .print-title h1 {
+    margin: 0 0 1mm;
     font-size: 16pt;
+    line-height: 1.05;
   }
 
-  .invoice-meta {
-    min-width: 0;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1.5mm 3mm;
+  .print-title .print-field {
+    display: block;
+    margin-bottom: 0.5mm;
   }
 
-  .parties-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 2mm;
-    margin: 2.5mm 0 2mm;
+  .print-field,
+  .print-value,
+  .print-money {
+    overflow-wrap: anywhere;
   }
 
-  .party-card,
-  .subcard,
-  .summary-card {
-    min-width: 0;
-    padding: 1.6mm;
-    border: 0.6pt solid #aab3bb;
-    border-radius: 0;
-    background: #fff !important;
-    box-shadow: none;
+  .print-field strong,
+  .print-record > strong,
+  .print-detail-row > strong {
+    font-size: 7.8pt;
+    font-weight: 700;
   }
 
-  .party-card h3,
-  .subcard h4,
-  .summary-card h4,
-  .invoice-section > h3 {
-    color: #000;
-  }
-
-  .data-grid {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 38mm), 1fr));
-    gap: 1mm 2mm;
-  }
-
-  .datum-label,
-  .datum-attributes {
+  .print-attribute {
+    margin-left: 0.8mm;
     color: #333;
     font-size: 7.8pt;
   }
 
-  .datum-value {
-    color: #000;
-    line-height: 1.2;
-    overflow-wrap: anywhere;
+  .print-currency,
+  .print-unit {
+    margin-left: 0.7mm;
   }
 
-  .party-name {
-    margin-bottom: 1mm;
-    color: #000;
-    font-size: 9.5pt;
+  .print-record {
+    display: block;
+    margin: 0 0 0.6mm;
   }
 
-  .invoice-section {
-    margin-top: 3mm;
+  .print-record > .print-field::after,
+  .print-account > .print-field::after {
+    content: "; ";
+  }
+
+  .print-section {
+    margin: 1.6mm 0 0;
     break-inside: auto;
     page-break-inside: auto;
   }
 
-  .invoice-section > h3 {
-    margin-bottom: 1.5mm;
-    padding-bottom: 0.7mm;
+  .print-section > h2 {
+    margin: 0 0 0.8mm;
+    padding: 0 0 0.4mm;
+    border-bottom: 0.5pt solid #777;
     font-size: 10pt;
-  }
-
-  h2,
-  h3,
-  h4 {
+    line-height: 1.1;
     break-after: avoid;
     page-break-after: avoid;
   }
 
-  .table-scroll {
-    overflow: visible;
-    border: 0;
-    border-radius: 0;
+  .print-totals table,
+  .print-line-table {
+    width: 100%;
+    max-width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
   }
 
-  .invoice-lines {
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
-    table-layout: fixed;
-    border-collapse: collapse;
+  .print-totals td {
+    padding: 0.8mm;
+    border: 0.5pt solid #aaa;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+
+  .print-total-label {
+    display: block;
+    margin-bottom: 0.4mm;
+    font-size: 7.8pt;
+    font-weight: 700;
+  }
+
+  .print-payable {
+    font-weight: 700;
+  }
+
+  .print-tax-total {
+    display: block;
+    margin: 0 0 0.6mm;
+    padding: 0 0 0.6mm;
+    border-bottom: 0.35pt solid #bbb;
+    overflow-wrap: anywhere;
+  }
+
+  .print-tax-subtotal {
+    margin: 0.4mm 0 0 2mm;
+    padding-left: 1.5mm;
+    border-left: 0.5pt solid #aaa;
+  }
+
+  .print-tax-category {
+    display: inline;
+  }
+
+  .print-tax-category .print-field::after,
+  .print-tax-subtotal > .print-field::after,
+  .print-tax-total > .print-field::after,
+  .print-line-table td .print-field::after {
+    content: "; ";
+  }
+
+  .print-line-table {
     break-inside: auto;
     page-break-inside: auto;
   }
 
-  .invoice-lines thead {
+  .print-line-table thead {
     display: table-header-group;
   }
 
-  .invoice-lines tbody {
+  .print-line-table tbody {
     display: table-row-group;
   }
 
-  .invoice-lines tr {
+  .print-line-table tr {
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
-  .invoice-lines th,
-  .invoice-lines td {
-    padding: 1mm;
-    color: #000;
+  .print-line-table th,
+  .print-line-table td {
+    padding: 0.9mm;
+    border: 0.5pt solid #999;
+    text-align: left;
+    vertical-align: top;
     font-size: 8.5pt;
-    white-space: normal;
     overflow-wrap: anywhere;
-    border-color: #aab3bb;
-    break-inside: auto;
-    page-break-inside: auto;
   }
 
-  .invoice-lines th:nth-child(1),
-  .invoice-lines td:nth-child(1) {
-    width: 5%;
-  }
+  .print-line-table th:nth-child(1),
+  .print-line-table td:nth-child(1) { width: 5%; }
+  .print-line-table th:nth-child(2),
+  .print-line-table td:nth-child(2) { width: 33%; }
+  .print-line-table th:nth-child(3),
+  .print-line-table td:nth-child(3) { width: 10%; }
+  .print-line-table th:nth-child(4),
+  .print-line-table td:nth-child(4) { width: 16%; }
+  .print-line-table th:nth-child(5),
+  .print-line-table td:nth-child(5) { width: 16%; }
+  .print-line-table th:nth-child(6),
+  .print-line-table td:nth-child(6) { width: 20%; }
 
-  .invoice-lines th:nth-child(2),
-  .invoice-lines td:nth-child(2) {
-    width: 36%;
-  }
-
-  .invoice-lines th:nth-child(3),
-  .invoice-lines td:nth-child(3) {
-    width: 10%;
-  }
-
-  .invoice-lines th:nth-child(4),
-  .invoice-lines td:nth-child(4) {
-    width: 14%;
-  }
-
-  .invoice-lines th:nth-child(5),
-  .invoice-lines td:nth-child(5) {
-    width: 18%;
-  }
-
-  .invoice-lines th:nth-child(6),
-  .invoice-lines td:nth-child(6) {
-    width: 17%;
-  }
-
-  .invoice-lines .subcard {
-    margin: 0;
-    padding: 0;
-    border: 0;
-  }
-
-  .invoice-lines .subcard h4 {
-    margin: 0 0 0.7mm;
-    font-size: 8.2pt;
-  }
-
-  .invoice-lines .subcard .data-grid {
-    grid-template-columns: 1fr;
-    gap: 0.7mm;
-  }
-
-  .tax-compact-category {
-    gap: 0.4mm 1.2mm;
-    line-height: 1.15;
-  }
-
-  .tax-compact-field {
-    gap: 0.4mm;
-  }
-
-  .tax-compact-label {
-    color: #333;
-    font-size: 7.8pt;
-  }
-
-  .tax-compact-value {
-    color: #000;
-    font-size: 8.5pt;
-  }
-
-  .tax-compact-attribute {
-    margin-left: 0.5mm;
-    color: #333;
-    font-size: 7.8pt;
-  }
-
-  .invoice-lines td:first-child,
-  .invoice-lines td:nth-child(3),
-  .invoice-lines td:nth-child(4),
-  .invoice-lines td:nth-child(5) {
-    white-space: normal;
-  }
-
-  .item-description {
-    margin-bottom: 1mm;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    orphans: 2;
-    widows: 2;
-  }
-
-  .subcard {
-    margin-top: 1mm;
-    padding: 0;
-    border: 0;
-    background-color: #fff !important;
-  }
-
-  .party-card h3,
-  .subcard h4,
-  .summary-card h4 {
-    margin-bottom: 0.8mm;
-  }
-
-  .subcard h4,
-  .summary-card h4 {
-    font-size: 8.5pt;
-  }
-
-  .summary-list {
+  .print-line-table td:nth-child(2) > .print-value {
     display: block;
+    margin-bottom: 0.4mm;
   }
 
-  .payment-list-multiple {
+  .print-bottom-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
-    gap: 1mm 2mm;
+    gap: 3mm;
   }
 
-  .payment-list-multiple > .summary-card + .summary-card {
-    margin-top: 0;
-  }
-
-  .summary-card + .summary-card {
-    margin-top: 1mm;
-  }
-
-  .summary-card {
-    padding: 1.5mm;
-    border-width: 0.6pt;
-    background-color: #fff !important;
-  }
-
-  .delivery-card,
-  .delivery-party,
-  .delivery-location,
-  .delivery-location .subcard {
-    margin-top: 0.8mm;
-    padding: 0;
-    border: 0;
-    background-color: #fff !important;
-  }
-
-  .delivery-card > h4 {
-    margin-bottom: 0.8mm;
-  }
-
-  .invoice-section[aria-labelledby="tax-heading"] .data-grid,
-  .invoice-section[aria-labelledby="totals-heading"] .data-grid,
-  .invoice-section[aria-labelledby="payment-heading"] .data-grid,
-  .invoice-section[aria-labelledby="delivery-heading"] .data-grid {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.7mm 2mm;
-  }
-
-  .compact-values .datum,
-  .invoice-section[aria-labelledby="payment-heading"] .datum,
-  .invoice-section[aria-labelledby="delivery-heading"] .datum {
-    display: flex;
-    flex: 0 1 auto;
-    align-items: baseline;
-    gap: 0.8mm;
-    min-width: 0;
-    max-width: 100%;
-  }
-
-  .compact-values .datum-label,
-  .invoice-section[aria-labelledby="payment-heading"] .datum-label,
-  .invoice-section[aria-labelledby="delivery-heading"] .datum-label {
-    display: inline;
-    flex: 0 0 auto;
-    margin: 0;
-    font-size: 7.8pt;
-    white-space: nowrap;
-  }
-
-  .compact-values .datum-label::after,
-  .invoice-section[aria-labelledby="payment-heading"] .datum-label::after,
-  .invoice-section[aria-labelledby="delivery-heading"] .datum-label::after {
-    content: ":";
-  }
-
-  .compact-values .datum-value,
-  .compact-values .datum-attributes,
-  .invoice-section[aria-labelledby="payment-heading"] .datum-value,
-  .invoice-section[aria-labelledby="payment-heading"] .datum-attributes,
-  .invoice-section[aria-labelledby="delivery-heading"] .datum-value,
-  .invoice-section[aria-labelledby="delivery-heading"] .datum-attributes {
-    display: inline;
-    min-width: 0;
-    margin: 0;
+  .print-detail-row {
+    margin: 0 0 0.8mm;
+    padding: 0.5mm 0;
+    border-bottom: 0.35pt solid #bbb;
     overflow-wrap: anywhere;
   }
 
-  .compact-values .datum-value,
-  .invoice-section[aria-labelledby="payment-heading"] .datum-value,
-  .invoice-section[aria-labelledby="delivery-heading"] .datum-value {
-    font-size: 9pt;
-    line-height: 1.2;
+  .print-detail-row > strong,
+  .print-account {
+    display: block;
   }
 
-  .grand-total {
-    border-color: #777;
-    margin-top: 1mm;
-    padding: 1mm;
-    background: #fff !important;
-    break-inside: auto;
-    page-break-inside: auto;
+  .print-detail-row > .print-field::after {
+    content: "; ";
   }
 
-  .grand-total .datum-value {
-    color: #000;
+  .print-account {
+    margin-top: 0.3mm;
   }
 }

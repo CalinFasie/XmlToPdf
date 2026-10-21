@@ -54,7 +54,7 @@ Maparea câmpurilor modelului în șablon și regulile pentru date opționale sa
 
 ### Tipărire și salvare PDF
 
-Fluxul țintă este Microsoft Edge pe Windows. După încărcarea unei facturi, apasă „Tipărește / Salvează PDF”, apoi alege imprimanta sau „Save as PDF” în dialogul Edge. Setarea CSS este A4 landscape, cu margini de 10 mm. În Print Preview, verifică **Paper size: A4**, **Layout: Landscape**, **Scale: Default/100%**, **Margins: Default** și dezactivează **Headers and footers** dacă nu dorești antetul și URL-ul browserului. Setările dialogului pot suprascrie CSS-ul.
+Fluxul țintă este Microsoft Edge pe Windows. După încărcarea unei facturi, apasă „Tipărește / Salvează PDF”, apoi alege imprimanta sau „Save as PDF” în dialogul Edge. Setarea CSS solicită A4 landscape, cu margini de 8 mm. În Print Preview, verifică **Paper size: A4**, **Layout: Landscape**, **Scale: Default/100%**, **Margins: Default** și dezactivează **Headers and footers** dacă nu dorești antetul și URL-ul browserului. Setările dialogului pot suprascrie CSS-ul.
 
 Verificarea vizuală a Print Preview în Edge pentru această versiune nu a fost executată. Matricea manuală și limitările de paginare sunt descrise în [`docs/PRINTING.md`](docs/PRINTING.md); O-06 rămâne deschisă până la validarea practică.
 
