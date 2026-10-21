@@ -1,6 +1,6 @@
 # XmlToPdf
 
-**Stadiu:** fundația Flask, parserul UBL cu modelul intern, încărcarea securizată în memorie, afișarea HTML compactă și fluxul de imprimare A4 landscape din browser sunt implementate. Utilizatorul a confirmat manual un PDF de o pagină pentru factura de referință; regulile generale de paginare rămân deschise. Generarea PDF în backend și launcherul nu sunt implementate.
+**Stadiu:** fundația Flask, parserul UBL cu modelul intern, încărcarea securizată în memorie, afișarea HTML compactă, fluxul de imprimare A4 landscape din browser și launcherul Windows portabil PyInstaller `--onedir` sunt implementate. Utilizatorul a confirmat manual un PDF de o pagină pentru factura de referință; regulile generale de paginare rămân deschise. Generarea PDF în backend nu este implementată.
 
 Repository: https://github.com/CalinFasie/XmlToPdf<br>
 Director local vizat: `D:\Github\XmlToPdf`
@@ -20,7 +20,7 @@ Utilizatorul va deschide un XML, va vizualiza factura ca pagină HTML în browse
 - Imprimare **A4 landscape** cu paginare automată și antetul tabelului repetat, unde este posibil.
 - **Print / Save as PDF** exclusiv la cererea utilizatorului, din browser.
 - Fără motor PDF în backend, bază de date, istoric al facturilor sau hosting public în MVP.
-- După instalare, procesarea nu are nevoie de internet sau de serviciile ANAF.
+- După instalare, procesarea nu are nevoie de internet sau de serviciile ANAF. Distribuția portabilă include runtime-ul Python; Microsoft Edge trebuie instalat separat.
 - Se acceptă doar XML bine format cu rădăcina UBL `Invoice` și câmpurile minime descrise în `docs/REQUIREMENTS.md`; nu se pretinde validare fiscală/XSD completă.
 - Corpul cererii de încărcare este limitat la **10 MiB**. XML-ul nu se persistă intenționat pe disc și valorile facturii nu se scriu în loguri.
 - Sumele sunt afișate cu textul zecimal din XML, fără localizare, separatori de mii, rotunjire sau recalculare. Diferențele aritmetice nu produc avertizări și nu blochează afișarea ori imprimarea.
@@ -79,7 +79,18 @@ python -m venv .venv
 
 Serverul ascultă numai pe `127.0.0.1:5000`, cu modul debug și reloader dezactivate. Deschide manual `http://127.0.0.1:5000/` în browser. Oprește serverul cu `Ctrl+C` în terminal.
 
-La distribuire, este planificat un **launcher Windows** care pornește serverul local și deschide automat browserul. Tehnologia de împachetare nu este încă decisă.
+### Build și utilizare Windows fără Python separat
+
+Pentru build, instalează dependența PyInstaller împreună cu uneltele de dezvoltare, apoi rulează din rădăcina repository-ului:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m PyInstaller --clean --noconfirm --distpath .\dist --workpath .\build .\XmlToPdf.spec
+```
+
+Rezultatul este `dist\XmlToPdf\XmlToPdf.exe`. Pentru utilizare, copiază **întregul folder** `dist\XmlToPdf` în locația dorită și pornește `XmlToPdf.exe`. Nu muta sau distribui EXE-ul singur. Calculatorul țintă trebuie să aibă Windows și Microsoft Edge instalat, dar nu are nevoie de Python, Flask sau lxml instalate separat.
+
+Launcherul pornește serverul numai la `127.0.0.1:5000`, verifică dacă aplicația răspunde și apoi deschide Edge fără a schimba browserul implicit. `Ctrl+C` oprește serverul controlat; închiderea ferestrei consolei încheie procesul launcherului, iar Windows eliberează socketul local. Edge rămâne deschis. Pentru detalii și starea verificărilor, vezi [`docs/WINDOWS_DISTRIBUTION.md`](docs/WINDOWS_DISTRIBUTION.md).
 
 ## Date de referință și confidențialitate
 

@@ -27,15 +27,10 @@
 | D-10 | Dezvoltare agentică prin **Codex**, cu Git și GitHub. | Instrucțiunile proiectului și schimbările trebuie să poată fi auditate. | Confirmată |
 | D-11 | Sumele și celelalte valori financiare se afișează **așa cum sunt în XML**; nu se emit avertizări de reconciliere și nu se blochează imprimarea pentru diferențe aritmetice. | XmlToPdf este vizualizator, nu validator sau corector fiscal. Erorile de structură XML rămân tratate separat. | Confirmată |
 | D-12 | **Fidelitatea PDF între browsere nu este obiectivul MVP.** | Este suficient un flux de imprimare funcțional și lizibil în Microsoft Edge pe Windows; nu cerem identitate între Edge/Chrome. | Confirmată |
+| D-13 | Launcherul de distribuție este un EXE Windows cu consolă, împachetat portabil cu **PyInstaller `--onedir`**. | Folderul complet `dist/XmlToPdf` include runtime-ul Python, dependențele și resursele aplicației; calculatorul țintă trebuie să aibă Microsoft Edge, dar nu Python separat. MSI, `--onefile`, servicii și pornirea la logare rămân în afara domeniului. | Confirmată |
 | D-14 | XML-ul trebuie să fie bine format, să aibă QName-ul UBL `Invoice` și să îndeplinească setul minim de câmpuri necesare afișării. | Definește când parserul poate produce o factură lizibilă fără a pretinde validare XSD sau fiscală; detaliile sunt în FR-04 din `REQUIREMENTS.md`. | Confirmată |
 | D-15 | Textul zecimal al sumelor se păstrează la afișare după eliminarea spațiilor exterioare. | Nu se localizează separatorul, nu se adaugă separatori de mii, nu se rotunjește și nu se recalculează; moneda se afișează separat. | Confirmată |
 | D-16 | Corpul cererii de încărcare are o limită maximă de **10 MiB (10 × 1.024 × 1.024 = 10.485.760 octeți)**. | Cererile peste limită se resping înainte de parsarea XML; limita reduce consumul necontrolat de memorie și timp. | Confirmată |
-
-## Decizii planificate
-
-| ID | Direcție | Motiv și implicații | Stare |
-|---|---|---|---|
-| D-13 | Launcher Windows care pornește serverul local și deschide browserul. | Este dorit pentru distribuție; formatul pachetului și tehnologia se decid după acceptarea prototipului web. | Planificată |
 
 ## Decizii deliberate de neimplementare în MVP
 
@@ -51,11 +46,10 @@
 
 | ID | Întrebare | Când o rezolvăm |
 |---|---|---|
-| O-01 | Cum implementăm și distribuim launcherul Windows? | După prototipul web local. |
 | O-05 | Ce câmpuri secundare intră în layoutul inițial? | În etapa de mapare UBL–HTML. |
 | O-06 | Ce reguli exacte de rupere a paginii și numerotare funcționează în Microsoft Edge? | În prototipul CSS de imprimare. |
 
-**Decizii închise în etapa 0:** O-03 s-a închis cu plafonul de 10 MiB din D-16; O-07 s-a închis cu setul minim din D-14/FR-04; fosta O-02 (identitate PDF între browsere) și fosta O-04 (avertizări/blocare la reconciliere) rămân închise conform D-11/D-12. O-01, O-05 și O-06 rămân deschise.
+**Decizii închise:** O-01 s-a închis prin D-13. O-03 s-a închis cu plafonul de 10 MiB din D-16; O-07 s-a închis cu setul minim din D-14/FR-04; fosta O-02 (identitate PDF între browsere) și fosta O-04 (avertizări/blocare la reconciliere) rămân închise conform D-11/D-12. O-05 și O-06 rămân deschise.
 
 ## Referințe
 

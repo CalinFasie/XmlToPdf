@@ -1,6 +1,6 @@
 # XmlToPdf — Cerințe pentru prima versiune
 
-> **Statut:** Draft consolidat; fundația Flask, parserul UBL, modelul intern, încărcarea XML securizată, afișarea HTML și fluxul de imprimare din browser sunt implementate<br>
+> **Statut:** Draft consolidat; fundația Flask, parserul UBL, modelul intern, încărcarea XML securizată, afișarea HTML, fluxul de imprimare din browser și launcherul Windows `--onedir` sunt implementate<br>
 > **Versiune document:** 0.3<br>
 > **Data:** 2026-10-20<br>
 > **Cale propusă în repository:** `docs/REQUIREMENTS.md`<br>
@@ -37,7 +37,7 @@ Motivul proiectului este independența față de disponibilitatea conversiei ofe
 
 Alegerea bibliotecilor este o direcție tehnică pentru MVP, nu o justificare pentru adăugarea unor componente suplimentare.
 
-**Direcție planificată, nu decizie de arhitectură pentru primul prototip:** D-13 — launcherul Windows va porni serverul local și va deschide browserul; tehnologia de împachetare și distribuire rămâne deschisă și se decide după prototip.
+**D-13 confirmată:** launcherul Windows este un EXE cu consolă, distribuit ca folder portabil PyInstaller `--onedir`; Microsoft Edge trebuie instalat pe calculatorul țintă, Python separat nu este necesar. Detaliile de build și utilizare sunt în `docs/WINDOWS_DISTRIBUTION.md`.
 
 ## 3. Domeniul primei versiuni (MVP)
 
@@ -138,10 +138,11 @@ Nu sunt necesare conturi, autentificare, istoric, administrare șabloane, dashbo
 | AC-13 | Imprimare în browserul țintă | În Microsoft Edge pe Windows, controalele web nu apar în documentul imprimat; conținutul este lizibil pe A4 landscape, fără omisiuni sau suprapuneri. Setările de imprimare ale testului sunt documentate. |
 | AC-14 | Securitate XML/HTML | XML-ul cu `DOCTYPE`, entități externe, XInclude sau structură malformată este respins fără acces la fișiere/rețea; textul XML care conține markup este afișat ca text, nu executat de browser. |
 | AC-15 | Valori financiare neconcordante (eșantion sintetic) | Se afișează exact valorile declarate; nu apare avertisment de reconciliere; utilizatorul poate imprima ori salva prin browser. |
-| AC-16 | Pornire prin launcher (la etapa de distribuție) | O acțiune Windows pornește serverul local și deschide browserul, fără pași manuali de terminal. |
+| AC-16 | Pornire prin launcher | `XmlToPdf.exe` pornește serverul numai pe `127.0.0.1:5000`, așteaptă ca ruta locală să răspundă și apoi lansează Microsoft Edge explicit. Dacă portul este ocupat, nu pornește alt server sau browser; dacă Edge nu pornește, serverul rămâne activ și URL-ul local este afișat pentru deschidere manuală. `Ctrl+C` oprește serverul și eliberează portul; închiderea ferestrei consolei încheie procesul launcherului, iar Windows închide socketul, fără a închide Edge. |
 | AC-17 | Limită încărcare | Cererile de până la 10 MiB sunt procesate numai dacă îndeplinesc celelalte criterii; cererile care depășesc 10 MiB sunt respinse înainte de parsare, inclusiv când antetul `Content-Length` lipsește sau este fals. |
 | AC-18 | Câmpuri minime | Cazurile sintetice verifică acceptarea câmpurilor minime din FR-04 și mesaje clare pentru fiecare câmp obligatoriu absent, gol sau duplicat ambiguu. Câmpurile opționale absente nu sunt inventate. |
 | AC-19 | Cereri locale | Testele confirmă respingerea Host-ului nepermis, a Origin-ului cross-site și a POST-ului fără token CSRF valid; nicio rută nu este accesibilă de pe LAN. |
+| AC-20 | Distribuție portabilă Windows | Folderul complet `dist/XmlToPdf` pornește independent de directorul curent, conține șabloanele, CSS-ul, runtime-ul Python și dependențele; pe calculatorul țintă este necesar Microsoft Edge, nu o instalare separată de Python. Build-ul și pornirea se verifică pe Windows; funcționarea pe un calculator fără Python instalat se confirmă manual înainte de acceptarea distribuției. |
 
 Testele de paginare se vor executa în Microsoft Edge pe Windows. Setările concrete de imprimare utilizate în verificare vor fi documentate. Nu se solicită comparații de fidelitate PDF între Edge, Chrome sau alte browsere.
 
@@ -170,11 +171,10 @@ Exemplele pot conține date reale și **nu trebuie comise** în repository-ul pu
 
 | ID | Decizie de finalizat | Direcție curentă |
 |---|---|---|
-| O-01 | Forma launcherului și metoda de distribuire Windows | Pornire cu un singur gest, server local și deschidere automată în browser; alegem implementarea după prototip. |
 | O-05 | Ce câmpuri secundare apar în layoutul de bază | Se finalizează după maparea UBL–HTML; fără valori inventate. |
 | O-06 | Regulile exacte pentru paginare și numerotare | Se validează în Microsoft Edge, fără cerințe de identitate vizuală între browsere. |
 
-**Decizii închise în această revizie:** plafonul de încărcare este 10 MiB (fosta O-03); condițiile minime de acceptare sunt cele din FR-04 (fosta O-07); nu se emit avertismente de reconciliere financiară și nu se blochează imprimarea din acest motiv (fosta O-04); nu este necesară compatibilitatea PDF între browsere (fosta O-02). Rămân deschise O-01, O-05 și O-06.
+**Decizii închise:** O-01 este rezolvată prin D-13; plafonul de încărcare este 10 MiB (fosta O-03); condițiile minime de acceptare sunt cele din FR-04 (fosta O-07); nu se emit avertismente de reconciliere financiară și nu se blochează imprimarea din acest motiv (fosta O-04); nu este necesară compatibilitatea PDF între browsere (fosta O-02). Rămân deschise O-05 și O-06.
 
 ## 10. Definiția de finalizare a MVP-ului
 
