@@ -1,0 +1,168 @@
+{% macro value(item) -%}
+  {% if item is not none %}
+    {% if item.value is not none %}<span class="screen-value">{{ item.value }}</span>{% endif %}
+    {% for attribute in item.attributes %}<span class="screen-attribute">{{ attribute.name }}={{ attribute.value }}</span>{% endfor %}
+  {% endif %}
+{%- endmacro %}
+
+{% macro amount_value(item) -%}
+  {% if item is not none %}
+    {% if item.value is not none %}<span class="screen-value">{{ item.value }}</span>{% endif %}
+    {% if item.currency_id %}<span class="screen-unit">{{ item.currency_id }}</span>{% endif %}
+    {% for attribute in item.attributes if attribute.name != 'currencyID' %}<span class="screen-attribute">{{ attribute.name }}={{ attribute.value }}</span>{% endfor %}
+  {% endif %}
+{%- endmacro %}
+
+{% macro quantity_value(item) -%}
+  {% if item is not none %}
+    {% if item.value is not none %}<span class="screen-value">{{ item.value }}</span>{% endif %}
+    {% if item.unit_code %}<span class="screen-unit">{{ item.unit_code }}</span>{% endif %}
+    {% for attribute in item.attributes if attribute.name != 'unitCode' %}<span class="screen-attribute">{{ attribute.name }}={{ attribute.value }}</span>{% endfor %}
+  {% endif %}
+{%- endmacro %}
+
+{% macro pair(label, item) -%}
+  {% if item is not none and (item.value is not none or item.attributes) %}
+    <div class="screen-pair"><dt>{{ label }}</dt><dd>{{ value(item) }}</dd></div>
+  {% endif %}
+{%- endmacro %}
+
+{% macro detail(label, item, kind='text') -%}
+  {% if item is not none and (item.value is not none or item.attributes or (kind == 'amount' and item.currency_id) or (kind == 'quantity' and item.unit_code)) %}
+    <span class="screen-detail"><strong>{{ label }}:</strong>
+      {% if kind == 'amount' %}{{ amount_value(item) }}
+      {% elif kind == 'quantity' %}{{ quantity_value(item) }}
+      {% else %}{{ value(item) }}{% endif %}
+    </span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro address(address, heading='Adresă') -%}
+  {% if address is not none %}
+    <section class="screen-record">
+      <h4>{{ heading }}</h4>
+      <dl class="screen-pairs">
+        {{ pair('ID adresă', address.id) }}
+        {{ pair('Stradă', address.street_name) }}
+        {{ pair('Stradă suplimentară', address.additional_street_name) }}
+        {{ pair('Număr', address.building_number) }}
+        {{ pair('Localitate', address.city_name) }}
+        {{ pair('Cod poștal', address.postal_zone) }}
+        {{ pair('Județ / regiune', address.country_subentity) }}
+        {% for line in address.address_lines %}{{ pair('Detaliu adresă', line) }}{% endfor %}
+        {% if address.country %}
+          {{ pair('Cod țară', address.country.identification_code) }}
+          {{ pair('Țară', address.country.name) }}
+        {% endif %}
+      </dl>
+    </section>
+  {% endif %}
+{%- endmacro %}
+
+{% macro contact(contact) -%}
+  {% if contact is not none %}
+    <section class="screen-record">
+      <h4>Contact</h4>
+      <dl class="screen-pairs">
+        {{ pair('ID contact', contact.id) }}
+        {{ pair('Persoană', contact.name) }}
+        {{ pair('Telefon', contact.telephone) }}
+        {{ pair('Fax', contact.telefax) }}
+        {{ pair('E-mail', contact.electronic_mail) }}
+        {{ pair('Notă', contact.note) }}
+      </dl>
+    </section>
+  {% endif %}
+{%- endmacro %}
+
+{% macro party(party, heading) -%}
+  {% if party is not none %}
+    <section class="screen-party">
+      <h3>{{ heading }}</h3>
+      <dl class="screen-pairs">
+        {% for name in party.party_names %}{{ pair('Denumire', name) }}{% endfor %}
+        {% for endpoint in party.endpoint_ids %}{{ pair('Endpoint electronic', endpoint) }}{% endfor %}
+        {% for identification in party.identifications %}{{ pair('Identificare comercială', identification.id) }}{% endfor %}
+        {% for entity in party.legal_entities %}
+          {{ pair('Denumire legală', entity.registration_name) }}
+          {{ pair('ID companie', entity.company_id) }}
+          {{ pair('Formă juridică', entity.company_legal_form) }}
+          {{ pair('Cod formă juridică', entity.company_legal_form_code) }}
+        {% endfor %}
+        {% for tax_scheme in party.tax_schemes %}
+          {{ pair('ID fiscal', tax_scheme.company_id) }}
+          {% if tax_scheme.tax_scheme %}
+            {{ pair('Schemă fiscală ID', tax_scheme.tax_scheme.id) }}
+            {{ pair('Schemă fiscală denumire', tax_scheme.tax_scheme.name) }}
+            {{ pair('Tip taxă', tax_scheme.tax_scheme.tax_type_code) }}
+          {% endif %}
+        {% endfor %}
+      </dl>
+      {% for item in party.postal_addresses %}{{ address(item) }}{% endfor %}
+      {% for item in party.contacts %}{{ contact(item) }}{% endfor %}
+    </section>
+  {% endif %}
+{%- endmacro %}
+
+{% macro tax_scheme(scheme) -%}
+  {% if scheme is not none %}
+    {{ detail('Schemă ID', scheme.id) }}
+    {{ detail('Schemă denumire', scheme.name) }}
+    {{ detail('Tip taxă', scheme.tax_type_code) }}
+  {% endif %}
+{%- endmacro %}
+
+{% macro tax_category(category) -%}
+  {% if category is not none %}
+    {{ detail('Categorie', category.id) }}
+    {{ detail('Denumire categorie', category.name) }}
+    {{ detail('% TVA', category.percent) }}
+    {{ detail('Cod motiv scutire', category.tax_exemption_reason_code) }}
+    {% for reason in category.tax_exemption_reasons %}{{ detail('Motiv scutire', reason) }}{% endfor %}
+    {{ tax_scheme(category.tax_scheme) }}
+  {% endif %}
+{%- endmacro %}
+
+{% macro line_tax_total(total, index, classifications) -%}
+  <div class="screen-line-tax">
+    <strong>TVA linie {{ index }}</strong>
+    <div class="screen-detail-list">
+      {{ detail('TVA', total.tax_amount, 'amount') }}
+      {{ detail('Rotunjire TVA', total.rounding_amount, 'amount') }}
+    </div>
+    {% for subtotal in total.subtotals %}
+      <div class="screen-line-subtotal">
+        <strong>Subtotal {{ loop.index }}</strong>
+        <div class="screen-detail-list">
+          {{ detail('Bază', subtotal.taxable_amount, 'amount') }}
+          {{ detail('TVA', subtotal.tax_amount, 'amount') }}
+          {{ detail('Ordine de calcul', subtotal.calculation_sequence_numeric) }}
+          {{ detail('TVA în moneda tranzacției', subtotal.transaction_currency_tax_amount, 'amount') }}
+          {{ detail('% subtotal', subtotal.percent) }}
+          {{ detail('Măsură bază', subtotal.base_unit_measure, 'quantity') }}
+          {{ detail('Valoare/unitate', subtotal.per_unit_amount, 'amount') }}
+          {{ detail('Interval de tier', subtotal.tier_range) }}
+          {{ detail('% tier', subtotal.tier_rate_percent) }}
+          {% if subtotal.tax_category is not none and subtotal.tax_category not in classifications %}{{ tax_category(subtotal.tax_category) }}{% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{%- endmacro %}
+
+{% macro account(account, heading) -%}
+  {% if account is not none %}
+    <section class="screen-record screen-account">
+      <h4>{{ heading }}</h4>
+      <dl class="screen-pairs">
+        {{ pair('IBAN / ID cont', account.id) }}
+        {{ pair('Denumire cont', account.name) }}
+        {{ pair('Tip cont', account.account_type_code) }}
+        {{ pair('Monedă cont', account.currency_code) }}
+        {{ pair('Instituție financiară', account.financial_institution_id) }}
+        {{ pair('ID sucursală', account.branch_id) }}
+        {{ pair('Denumire sucursală', account.branch_name) }}
+      </dl>
+    </section>
+  {% endif %}
+{%- endmacro %}

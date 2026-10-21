@@ -1,41 +1,57 @@
-{% import "_invoice_macros.html" as ui %}
-<article class="invoice" aria-labelledby="invoice-title">
+{% import "_invoice_screen_macros.html" as screen %}
+<article class="invoice screen-invoice" aria-labelledby="invoice-title">
   <div class="invoice-actions">
     <button class="print-button" type="button" data-action="print">Tipărește / Salvează PDF</button>
   </div>
-  <header class="invoice-heading">
-    <div>
+
+  <header class="screen-header">
+    {{ screen.party(invoice.supplier, 'Furnizor') }}
+    <section class="screen-document" aria-label="Date factură">
       <p class="section-kicker">Document UBL</p>
       <h2 id="invoice-title">Factură</h2>
-      {% if invoice.invoice_id.value is not none %}<p class="invoice-number">{{ invoice.invoice_id.value }}</p>{% endif %}
-      {% if invoice.invoice_id.attributes %}
-        <p class="datum-attributes">
-          {% for attribute in invoice.invoice_id.attributes %}{{ attribute.name }}: {{ attribute.value }}{% if not loop.last %}; {% endif %}{% endfor %}
-        </p>
-      {% endif %}
-    </div>
-    <div class="invoice-meta">
-      {{ ui.field('Data emiterii', invoice.issue_date) }}
-      {{ ui.field('Scadență', invoice.due_date) }}
-      {{ ui.field('Tip document', invoice.invoice_type_code) }}
-      {{ ui.field('Moneda documentului', invoice.document_currency_code) }}
-      {{ ui.field('Moneda TVA', invoice.tax_currency_code) }}
-    </div>
+      <dl class="screen-pairs screen-document-pairs">
+        {{ screen.pair('Număr', invoice.invoice_id) }}
+        {{ screen.pair('Emitere', invoice.issue_date) }}
+        {{ screen.pair('Scadență', invoice.due_date) }}
+        {{ screen.pair('Tip', invoice.invoice_type_code) }}
+        {{ screen.pair('Monedă', invoice.document_currency_code) }}
+        {{ screen.pair('Monedă TVA', invoice.tax_currency_code) }}
+      </dl>
+    </section>
+    {{ screen.party(invoice.customer, 'Client') }}
   </header>
 
-  <div class="parties-grid">
-    {{ ui.party_block('Furnizor', invoice.supplier) }}
-    {{ ui.party_block('Client', invoice.customer) }}
-  </div>
+  {% if invoice.legal_monetary_total %}
+    <section class="screen-total-band" aria-label="Totaluri factură">
+      {% set totals = [
+        ('Net linii', invoice.legal_monetary_total.line_extension_amount),
+        ('Fără TVA', invoice.legal_monetary_total.tax_exclusive_amount),
+        ('Cu TVA', invoice.legal_monetary_total.tax_inclusive_amount),
+        ('Reduceri', invoice.legal_monetary_total.allowance_total_amount),
+        ('Costuri suplimentare', invoice.legal_monetary_total.charge_total_amount),
+        ('Avans', invoice.legal_monetary_total.prepaid_amount),
+        ('Rotunjire', invoice.legal_monetary_total.payable_rounding_amount),
+        ('De plată', invoice.legal_monetary_total.payable_amount)
+      ] %}
+      {% for label, amount in totals %}
+        {% if amount is not none and (amount.value is not none or amount.currency_id or amount.attributes) %}
+          <div class="screen-total{% if label == 'De plată' %} screen-payable{% endif %}">
+            <span class="screen-total-label">{{ label }}</span>
+            <span class="screen-total-value">{{ screen.amount_value(amount) }}</span>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </section>
+  {% endif %}
 
   <section class="invoice-section" aria-labelledby="lines-heading">
     <h3 id="lines-heading">Linii factură</h3>
     <div class="table-scroll">
-      <table class="invoice-lines">
+      <table class="invoice-lines screen-lines">
         <thead>
           <tr>
             <th scope="col">Nr.</th>
-            <th scope="col">Articol / descriere</th>
+            <th scope="col">Articol / descriere / cod</th>
             <th scope="col">Cantitate</th>
             <th scope="col">Preț unitar</th>
             <th scope="col">Valoare netă</th>
@@ -45,28 +61,26 @@
         <tbody>
           {% for line in invoice.lines %}
             <tr>
-              <td>{{ ui.field('Linie', line.id) }}</td>
-              <td>
-                {% for name in line.item.names %}
-                  {% if name.value is not none %}<p class="item-description">{{ name.value }}</p>{% else %}{{ ui.field('Denumire articol', name) }}{% endif %}
-                {% endfor %}
-                {% for description in line.item.descriptions %}
-                  {% if description.value is not none %}<p class="item-description">{{ description.value }}</p>{% else %}{{ ui.field('Descriere articol', description) }}{% endif %}
-                {% endfor %}
-                {% if line.item.sellers_item_identification %}{{ ui.field('Cod articol furnizor', line.item.sellers_item_identification.id) }}{% endif %}
-                {% if line.item.standard_item_identification %}{{ ui.field('Cod standard articol', line.item.standard_item_identification.id) }}{% endif %}
-                {% for total in line.tax_totals %}{{ ui.tax_total(total, 'TVA linie ' ~ loop.index) }}{% endfor %}
+              <td class="screen-line-id">{{ screen.value(line.id) }}</td>
+              <td class="screen-item-cell">
+                {% for name in line.item.names %}<p class="item-description">{{ screen.value(name) }}</p>{% endfor %}
+                {% for description in line.item.descriptions %}<p class="item-description">{{ screen.value(description) }}</p>{% endfor %}
+                {% if line.item.sellers_item_identification %}<div class="screen-item-code"><strong>Cod furnizor:</strong> {{ screen.value(line.item.sellers_item_identification.id) }}</div>{% endif %}
+                {% if line.item.standard_item_identification %}<div class="screen-item-code"><strong>Cod standard:</strong> {{ screen.value(line.item.standard_item_identification.id) }}</div>{% endif %}
+                {% for total in line.tax_totals %}{{ screen.line_tax_total(total, loop.index, line.item.classified_tax_categories) }}{% endfor %}
               </td>
-              <td>{{ ui.quantity('Cantitate facturată', line.invoiced_quantity) }}</td>
-              <td>
+              <td class="screen-nowrap">{{ screen.quantity_value(line.invoiced_quantity) }}</td>
+              <td class="screen-nowrap">
                 {% if line.price %}
-                  {{ ui.amount('Preț unitar', line.price.price_amount) }}
-                  {{ ui.quantity('Baza prețului', line.price.base_quantity) }}
+                  {{ screen.amount_value(line.price.price_amount) }}
+                  {% if line.price.base_quantity %}<div class="screen-item-code">Bază: {{ screen.quantity_value(line.price.base_quantity) }}</div>{% endif %}
                 {% endif %}
               </td>
-              <td>{{ ui.amount('Valoare netă', line.line_extension_amount) }}</td>
+              <td class="screen-nowrap">{{ screen.amount_value(line.line_extension_amount) }}</td>
               <td>
-                {% for category in line.item.classified_tax_categories %}{{ ui.tax_category_compact(category) }}{% endfor %}
+                {% for category in line.item.classified_tax_categories %}
+                  <div class="screen-tax-category" aria-label="Categorie TVA linie">{{ screen.tax_category(category) }}</div>
+                {% endfor %}
               </td>
             </tr>
           {% endfor %}
@@ -78,78 +92,104 @@
   {% if invoice.tax_totals %}
     <section class="invoice-section" aria-labelledby="tax-heading">
       <h3 id="tax-heading">TVA la nivel de document</h3>
-      <div class="summary-list">
-        {% for total in invoice.tax_totals %}{{ ui.tax_total(total, 'Total TVA ' ~ loop.index) }}{% endfor %}
+      <div class="screen-tax-scroll">
+        <table class="screen-tax-table">
+          <thead>
+            <tr>
+              <th scope="col">Subtotal</th>
+              <th scope="col">Bază impozabilă</th>
+              <th scope="col">TVA</th>
+              <th scope="col">%</th>
+              <th scope="col">Categorie și schemă</th>
+              <th scope="col">Alte date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for total in invoice.tax_totals %}
+              <tr class="screen-tax-total-row">
+                <th scope="rowgroup" colspan="6">
+                  Total TVA {{ loop.index }}: {{ screen.amount_value(total.tax_amount) }}
+                  {% if total.rounding_amount is not none and (total.rounding_amount.value is not none or total.rounding_amount.currency_id or total.rounding_amount.attributes) %}<span class="screen-detail">Rotunjire: {{ screen.amount_value(total.rounding_amount) }}</span>{% endif %}
+                </th>
+              </tr>
+              {% for subtotal in total.subtotals %}
+                <tr>
+                  <th scope="row">Subtotal {{ loop.index }}</th>
+                  <td>{{ screen.amount_value(subtotal.taxable_amount) }}</td>
+                  <td>{{ screen.amount_value(subtotal.tax_amount) }}</td>
+                  <td>{{ screen.value(subtotal.percent) }}</td>
+                  <td class="screen-tax-category">{{ screen.tax_category(subtotal.tax_category) }}</td>
+                  <td>
+                    <div class="screen-detail-list">
+                      {{ screen.detail('Ordine de calcul', subtotal.calculation_sequence_numeric) }}
+                      {{ screen.detail('TVA în moneda tranzacției', subtotal.transaction_currency_tax_amount, 'amount') }}
+                      {{ screen.detail('Măsură bază', subtotal.base_unit_measure, 'quantity') }}
+                      {{ screen.detail('Valoare/unitate', subtotal.per_unit_amount, 'amount') }}
+                      {{ screen.detail('Interval de tier', subtotal.tier_range) }}
+                      {{ screen.detail('% tier', subtotal.tier_rate_percent) }}
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </section>
   {% endif %}
 
-  {% if invoice.legal_monetary_total %}
-    <section class="invoice-section" aria-labelledby="totals-heading">
-      <h3 id="totals-heading">Totaluri</h3>
-      <div class="summary-card">
-        <div class="data-grid compact-values total-values">
-          {{ ui.amount('Valoare netă linii', invoice.legal_monetary_total.line_extension_amount) }}
-          {{ ui.amount('Total fără TVA', invoice.legal_monetary_total.tax_exclusive_amount) }}
-          {{ ui.amount('Total cu TVA', invoice.legal_monetary_total.tax_inclusive_amount) }}
-          {{ ui.amount('Total reduceri', invoice.legal_monetary_total.allowance_total_amount) }}
-          {{ ui.amount('Total costuri suplimentare', invoice.legal_monetary_total.charge_total_amount) }}
-          {{ ui.amount('Plătit în avans', invoice.legal_monetary_total.prepaid_amount) }}
-          {{ ui.amount('Rotunjire la plată', invoice.legal_monetary_total.payable_rounding_amount) }}
-        </div>
-        <div class="grand-total compact-values">{{ ui.amount('De plată', invoice.legal_monetary_total.payable_amount) }}</div>
-      </div>
-    </section>
-  {% endif %}
-
-  {% if invoice.payment_means %}
-    <section class="invoice-section" aria-labelledby="payment-heading">
-      <h3 id="payment-heading">Plată</h3>
-      <div class="summary-list payment-list{% if invoice.payment_means|length > 1 %} payment-list-multiple{% endif %}">
-        {% for payment in invoice.payment_means %}
-          <section class="summary-card">
-            <h4>Mijloc de plată {{ loop.index }}</h4>
-            <div class="data-grid compact-values">
-              {{ ui.field('Cod mijloc de plată', payment.payment_means_code) }}
-              {{ ui.field('Data scadenței plății', payment.payment_due_date) }}
-              {{ ui.field('Canal de plată', payment.payment_channel_code) }}
-              {{ ui.field('Identificator instrucțiune', payment.instruction_id) }}
-              {% for note in payment.instruction_notes %}{{ ui.field('Instrucțiune de plată', note) }}{% endfor %}
-              {% for payment_id in payment.payment_ids %}{{ ui.field('Referință plată', payment_id) }}{% endfor %}
-            </div>
-            {{ ui.financial_account(payment.payee_financial_account, 'Cont beneficiar') }}
-            {{ ui.financial_account(payment.payer_financial_account, 'Cont plătitor') }}
-          </section>
-        {% endfor %}
-      </div>
-    </section>
-  {% endif %}
-
-  {% if invoice.deliveries %}
-    <section class="invoice-section" aria-labelledby="delivery-heading">
-      <h3 id="delivery-heading">Livrare</h3>
-      <div class="summary-list">
-        {% for delivery in invoice.deliveries %}
-          <section class="summary-card delivery-card">
-            <h4>Livrare {{ loop.index }}</h4>
-            <div class="data-grid compact-values">
-              {{ ui.field('Data livrării', delivery.actual_delivery_date) }}
-              {{ ui.field('Ora livrării', delivery.actual_delivery_time) }}
-            </div>
-            {% if delivery.delivery_party %}{{ ui.party_block('Destinatar', delivery.delivery_party, 'party-card delivery-party') }}{% endif %}
-            {% if delivery.delivery_location %}
-              <section class="subcard delivery-location">
-                <h4>Locul livrării</h4>
-                <div class="data-grid">
-                  {{ ui.field('Identificator locație', delivery.delivery_location.id) }}
-                  {% for description in delivery.delivery_location.descriptions %}{{ ui.field('Descriere locație', description) }}{% endfor %}
-                </div>
-                {% if delivery.delivery_location.address %}{{ ui.address_block(delivery.delivery_location.address, 'Adresă livrare') }}{% endif %}
+  {% if invoice.payment_means or invoice.deliveries %}
+    <div class="screen-bottom-grid">
+      {% if invoice.payment_means %}
+        <section class="invoice-section screen-payment-section" aria-labelledby="payment-heading">
+          <h3 id="payment-heading">Plată</h3>
+          <div class="screen-record-list">
+            {% for payment in invoice.payment_means %}
+              <section class="screen-record screen-payment">
+                <h4>Mijloc de plată {{ loop.index }}</h4>
+                <dl class="screen-pairs">
+                  {{ screen.pair('Cod mijloc de plată', payment.payment_means_code) }}
+                  {{ screen.pair('Scadență plată', payment.payment_due_date) }}
+                  {{ screen.pair('Canal plată', payment.payment_channel_code) }}
+                  {{ screen.pair('ID instrucțiune', payment.instruction_id) }}
+                  {% for note in payment.instruction_notes %}{{ screen.pair('Instrucțiune', note) }}{% endfor %}
+                  {% for payment_id in payment.payment_ids %}{{ screen.pair('Referință plată', payment_id) }}{% endfor %}
+                </dl>
+                {{ screen.account(payment.payee_financial_account, 'Cont beneficiar') }}
+                {{ screen.account(payment.payer_financial_account, 'Cont plătitor') }}
               </section>
-            {% endif %}
-          </section>
-        {% endfor %}
-      </div>
-    </section>
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+
+      {% if invoice.deliveries %}
+        <section class="invoice-section screen-delivery-section" aria-labelledby="delivery-heading">
+          <h3 id="delivery-heading">Livrare</h3>
+          <div class="screen-record-list">
+            {% for delivery in invoice.deliveries %}
+              <section class="screen-record screen-delivery">
+                <h4>Livrare {{ loop.index }}</h4>
+                <dl class="screen-pairs">
+                  {{ screen.pair('Data livrării', delivery.actual_delivery_date) }}
+                  {{ screen.pair('Ora livrării', delivery.actual_delivery_time) }}
+                </dl>
+                {% if delivery.delivery_party %}{{ screen.party(delivery.delivery_party, 'Destinatar') }}{% endif %}
+                {% if delivery.delivery_location %}
+                  <section class="screen-record">
+                    <h4>Locul livrării</h4>
+                    <dl class="screen-pairs">
+                      {{ screen.pair('ID locație', delivery.delivery_location.id) }}
+                      {% for description in delivery.delivery_location.descriptions %}{{ screen.pair('Descriere locație', description) }}{% endfor %}
+                    </dl>
+                    {% if delivery.delivery_location.address %}{{ screen.address(delivery.delivery_location.address, 'Adresă livrare') }}{% endif %}
+                  </section>
+                {% endif %}
+              </section>
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+    </div>
   {% endif %}
 </article>

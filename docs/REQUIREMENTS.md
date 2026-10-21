@@ -1,6 +1,6 @@
 # XmlToPdf — Cerințe pentru prima versiune
 
-> **Statut:** Draft consolidat; fundația Flask, parserul UBL, modelul intern și încărcarea XML securizată sunt implementate; afișarea facturii nu a început<br>
+> **Statut:** Draft consolidat; fundația Flask, parserul UBL, modelul intern, încărcarea XML securizată, afișarea HTML și fluxul de imprimare din browser sunt implementate<br>
 > **Versiune document:** 0.3<br>
 > **Data:** 2026-10-20<br>
 > **Cale propusă în repository:** `docs/REQUIREMENTS.md`<br>

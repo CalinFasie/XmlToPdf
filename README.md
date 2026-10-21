@@ -1,6 +1,6 @@
 # XmlToPdf
 
-**Stadiu:** fundația Flask, parserul UBL cu modelul intern, încărcarea securizată în memorie, afișarea HTML și fluxul de imprimare A4 landscape din browser sunt implementate. Verificarea practică în Print Preview Microsoft Edge nu a fost efectuată; generarea PDF în backend și launcherul nu sunt implementate.
+**Stadiu:** fundația Flask, parserul UBL cu modelul intern, încărcarea securizată în memorie, afișarea HTML compactă și fluxul de imprimare A4 landscape din browser sunt implementate. Utilizatorul a confirmat manual un PDF de o pagină pentru factura de referință; regulile generale de paginare rămân deschise. Generarea PDF în backend și launcherul nu sunt implementate.
 
 Repository: https://github.com/CalinFasie/XmlToPdf<br>
 Director local vizat: `D:\Github\XmlToPdf`
@@ -48,7 +48,7 @@ Flask local -> Parser UBL (lxml) -> Model factură -> Jinja2 + HTML/CSS local
 
 ## Situația implementării
 
-Aplicația acceptă local un XML UBL prin browser, îl procesează în memorie cu parserul UBL existent și afișează factura într-un șablon HTML din același flux. După încărcarea reușită, butonul „Tipărește / Salvează PDF” deschide dialogul browserului. CSS-ul local cere A4 landscape și permite continuarea tabelului pe mai multe pagini. Datele facturii nu sunt păstrate în sesiune sau într-o bază de date. PDF-ul nu este generat de backend.
+Aplicația acceptă local un XML UBL prin browser, îl procesează în memorie cu parserul UBL existent și afișează factura într-un layout web compact, adaptiv, din același flux. Antetul, banda totalurilor, tabelele și secțiunile de plată/livrare folosesc datele aceluiași model `Invoice`. Prezentarea pentru ecran și șablonul dedicat de imprimare rămân separate. După încărcarea reușită, butonul „Tipărește / Salvează PDF” deschide dialogul browserului. CSS-ul local cere A4 landscape și permite continuarea tabelului pe mai multe pagini. Datele facturii nu sunt păstrate în sesiune sau într-o bază de date. PDF-ul nu este generat de backend.
 
 Maparea câmpurilor modelului în șablon și regulile pentru date opționale sau repetabile sunt descrise în [`docs/UBL_MAPPING.md`](docs/UBL_MAPPING.md). Propunerea nu închide decizia O-05.
 
@@ -56,7 +56,7 @@ Maparea câmpurilor modelului în șablon și regulile pentru date opționale sa
 
 Fluxul țintă este Microsoft Edge pe Windows. După încărcarea unei facturi, apasă „Tipărește / Salvează PDF”, apoi alege imprimanta sau „Save as PDF” în dialogul Edge. Setarea CSS solicită A4 landscape, cu margini de 8 mm. În Print Preview, verifică **Paper size: A4**, **Layout: Landscape**, **Scale: Default/100%**, **Margins: Default** și dezactivează **Headers and footers** dacă nu dorești antetul și URL-ul browserului. Setările dialogului pot suprascrie CSS-ul.
 
-Verificarea vizuală a Print Preview în Edge pentru această versiune nu a fost executată. Matricea manuală și limitările de paginare sunt descrise în [`docs/PRINTING.md`](docs/PRINTING.md); O-06 rămâne deschisă până la validarea practică.
+Utilizatorul a confirmat manual în Edge un PDF A4 Landscape de o pagină pentru factura locală de referință, înaintea schimbărilor de ecran din Task 005F. Task 005F păstrează șablonul și CSS-ul dedicate imprimării neschimbate. Paginarea documentelor mai lungi și variațiile de configurare rămân de verificat; matricea este descrisă în [`docs/PRINTING.md`](docs/PRINTING.md), iar O-06 rămâne deschisă pentru acele cazuri.
 
 ### Cerințe
 

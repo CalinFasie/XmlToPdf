@@ -18,7 +18,7 @@ Versiunea de imprimare urmează această ordine:
 4. tabelul tuturor liniilor, în ordinea XML, cu denumiri/descrieri, identificatori, cantități și unități, prețuri, valori nete și clasificarea TVA;
 5. toate metodele de plată, conturile și informațiile de livrare, în secțiuni compacte alăturate.
 
-Valorile și atributele expuse de model sunt randate prin Jinja2, care escapează conținutul XML. Sumele păstrează textul zecimal și moneda; nu se recalculează, rotunjesc sau localizează. Versiunea de ecran rămâne neschimbată ca structură și stil.
+Valorile și atributele expuse de model sunt randate prin Jinja2, care escapează conținutul XML. Sumele păstrează textul zecimal și moneda; nu se recalculează, rotunjesc sau localizează. Versiunea de ecran folosește un layout compact, separat: antet cu trei zone, bandă orizontală de totaluri, tabele de linii și TVA, apoi plată și livrare în două coloane pe desktop. Acesta reutilizează același model `Invoice`; stilurile sale sunt prefixate cu `.invoice-screen` și preced blocul `@page`. Task 005F nu schimbă șablonul dedicat `invoice_print.html` sau regulile CSS de imprimare.
 
 ## Format și reguli CSS
 
@@ -51,4 +51,4 @@ Pentru verificarea manuală în Edge, folosește exclusiv un XML sintetic echiva
 5. Headers and footers: dezactivate dacă nu dorești elementele adăugate de browser.
 6. Numărul de pagini, lizibilitatea, toate câmpurile și absența tăierilor ori suprapunerilor.
 
-**Stare de verificare:** testele automate pot confirma conținutul și structura HTML, dar Edge nu a produs un PDF în verificarea headless disponibilă anterior (procesul s-a încheiat cu `0xC0000005`). Nu există o măsurare Edge nouă pentru șablonul dedicat; nu se afirmă că rezultatul de o pagină a fost atins. O-06 rămâne deschisă până la verificarea manuală în Microsoft Edge și confirmarea utilizatorului.
+**Stare de verificare:** utilizatorul a confirmat manual că versiunea dedicată de imprimare a produs în Microsoft Edge un PDF A4 Landscape de exact o pagină pentru factura locală de referință cu două linii, două metode de plată, TVA, totaluri și livrare. Task 005F nu a modificat acel șablon sau CSS-ul de imprimare. Această confirmare nu reprezintă o măsurare nouă în cadrul taskului curent și nu acoperă facturi mai mari, alte versiuni Edge sau configurații de imprimare. O-06 rămâne deschisă pentru verificarea paginării generale.
