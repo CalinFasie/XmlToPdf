@@ -138,6 +138,28 @@ def test_screen_layout_has_three_compact_header_zones_and_separate_print_css(
     assert ".screen-total-band" not in print_css
 
 
+def test_screen_label_value_styles_keep_pairs_inline_and_values_wrappable() -> None:
+    css = (Path(__file__).parents[1] / "src" / "xmltopdf" / "static" / "css" / "app.css").read_text(
+        encoding="utf-8"
+    )
+    screen_css = css[: css.index("@page")]
+    pair_rule = re.search(r"\.screen-pair\s*\{([^}]*)\}", screen_css)
+    label_rule = re.search(r"\.screen-pair dt\s*\{([^}]*)\}", screen_css)
+    value_rule = re.search(r"\.screen-pair dd\s*\{([^}]*)\}", screen_css)
+    total_rule = re.search(r"\.screen-total\s*\{([^}]*)\}", screen_css)
+    detail_rule = re.search(r"\.screen-detail\s*\{([^}]*)\}", screen_css)
+
+    assert pair_rule is not None and "display: flex;" in pair_rule.group(1)
+    assert "grid-template-columns" not in pair_rule.group(1)
+    assert label_rule is not None and "max-width: 45%;" in label_rule.group(1)
+    assert value_rule is not None and "flex: 1 1 0;" in value_rule.group(1)
+    assert "min-width: 0;" in value_rule.group(1)
+    assert "overflow-wrap: anywhere;" in value_rule.group(1)
+    assert total_rule is not None and "flex-direction: row;" in total_rule.group(1)
+    assert "flex-wrap: wrap;" in total_rule.group(1)
+    assert detail_rule is not None and "display: inline-block;" in detail_rule.group(1)
+
+
 @pytest.mark.parametrize("line_count", [1, 2, 10, 30, 100])
 def test_all_invoice_lines_are_rendered_in_xml_order(
     local_client: tuple[FlaskClient, str], line_count: int
@@ -354,6 +376,35 @@ def test_repeated_tax_subtotals_totals_payment_means_and_delivery_are_rendered(
     assert "Destinatar sintetic" in html
     assert "Depozit sintetic" in html
     assert "Brașov" in html
+    for label in (
+        "Număr",
+        "Denumire",
+        "ID fiscal",
+        "Telefon",
+        "Stradă",
+        "Localitate",
+        "Cod mijloc de plată",
+        "IBAN / ID cont",
+        "Data livrării",
+        "Descriere locație",
+    ):
+        assert re.search(
+            rf'<div class="screen-pair"><dt>{re.escape(label)}</dt><dd>.*?</dd></div>',
+            html,
+            re.DOTALL,
+        )
+    assert re.search(
+        r'<span class="screen-total-label">De plată</span>\s*'
+        r'<span class="screen-total-value">.*?</span>',
+        html,
+        re.DOTALL,
+    )
+    assert re.search(
+        r'<span class="screen-detail"><strong>Interval de tier:</strong>\s*'
+        r'<span class="screen-value">.*?</span>',
+        html,
+        re.DOTALL,
+    )
     for value in (
         "Articol 001",
         "Articol 002",
