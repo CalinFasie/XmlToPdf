@@ -13,11 +13,13 @@ from xmltopdf.edge_session import (
     PROFILE_MARKER_CONTENT,
     PROFILE_PREFIX,
     WINDOW_CLASS,
+    WM_CLOSE,
     EdgeAppSession,
     EdgeSessionError,
     EdgeWindowTracker,
     ProcessInfo,
     WindowInfo,
+    Win32EdgeWindowApi,
     cleanup_stale_profiles,
 )
 
@@ -36,6 +38,8 @@ class FakeWindowApi:
         self.processes: dict[int, ProcessInfo] = {}
         self.windows: dict[int, WindowInfo] = {}
         self.activations: list[int] = []
+        self.close_requests: list[int] = []
+        self.close_on_message = False
         self.fail_process_snapshot = False
 
     def snapshot_processes(self) -> dict[int, ProcessInfo]:
@@ -53,6 +57,14 @@ class FakeWindowApi:
         if not self.is_window(hwnd):
             return False
         self.activations.append(hwnd)
+        return True
+
+    def post_close_message(self, hwnd: int) -> bool:
+        self.close_requests.append(hwnd)
+        if hwnd not in self.windows:
+            return False
+        if self.close_on_message:
+            self.windows.pop(hwnd, None)
         return True
 
 
@@ -168,6 +180,103 @@ def test_session_launches_isolated_edge_app_and_activates_existing_window(
     api.processes.clear()
     session.cleanup()
     assert not profile.exists()
+
+
+def test_close_window_targets_only_the_validated_dedicated_edge_hwnd(
+    edge_temp_dir: Path,
+) -> None:
+    api = FakeWindowApi()
+    api.close_on_message = True
+    api.processes = {200: ProcessInfo(200, 100, "msedge.exe")}
+    api.windows = {
+        500: WindowInfo(500, 200, WINDOW_CLASS, True),
+        900: WindowInfo(900, 999, WINDOW_CLASS, True),
+    }
+    session = EdgeAppSession(
+        edge_temp_dir / "msedge.exe",
+        on_window_closed=lambda: None,
+        on_monitor_failure=lambda: None,
+        api=api,
+        process_factory=lambda *_a, **_k: SimpleNamespace(pid=100),
+        temp_root=edge_temp_dir,
+        startup_timeout=0.5,
+        close_grace=0.01,
+        poll_interval=0.005,
+    )
+
+    session.open_or_activate("http://127.0.0.1:5000/")
+    assert session.close_window(timeout=0.2)
+    assert api.close_requests == [500]
+    assert 500 not in api.windows
+    assert 900 in api.windows
+    api.processes.clear()
+    session.cleanup()
+
+
+def test_close_window_refuses_reused_or_unassociated_hwnd(edge_temp_dir: Path) -> None:
+    api = FakeWindowApi()
+    api.processes = {200: ProcessInfo(200, 100, "msedge.exe")}
+    api.windows = {500: WindowInfo(500, 200, WINDOW_CLASS, True)}
+    session = EdgeAppSession(
+        edge_temp_dir / "msedge.exe",
+        on_window_closed=lambda: None,
+        on_monitor_failure=lambda: None,
+        api=api,
+        process_factory=lambda *_a, **_k: SimpleNamespace(pid=100),
+        temp_root=edge_temp_dir,
+        startup_timeout=0.5,
+        poll_interval=0.005,
+    )
+    session.open_or_activate("http://127.0.0.1:5000/")
+    assert session.tracker is not None
+
+    # Simulate HWND reuse by a different Edge process after it was tracked.
+    api.windows[500] = WindowInfo(500, 999, WINDOW_CLASS, True)
+    assert not session.close_window(timeout=0.1)
+    assert api.close_requests == []
+    assert api.windows[500].pid == 999
+    session._monitor_stop.set()
+    api.processes.clear()
+    session.cleanup()
+
+
+def test_close_window_failure_keeps_dedicated_window_available(edge_temp_dir: Path) -> None:
+    api = FakeWindowApi()
+    api.processes = {200: ProcessInfo(200, 100, "msedge.exe")}
+    api.windows = {500: WindowInfo(500, 200, WINDOW_CLASS, True)}
+    session = EdgeAppSession(
+        edge_temp_dir / "msedge.exe",
+        on_window_closed=lambda: None,
+        on_monitor_failure=lambda: None,
+        api=api,
+        process_factory=lambda *_a, **_k: SimpleNamespace(pid=100),
+        temp_root=edge_temp_dir,
+        startup_timeout=0.5,
+        poll_interval=0.005,
+    )
+    session.open_or_activate("http://127.0.0.1:5000/")
+
+    assert not session.close_window(timeout=0.03)
+    assert api.close_requests == [500]
+    assert 500 in api.windows
+    session._monitor_stop.set()
+    api.processes.clear()
+    session.cleanup()
+
+
+def test_win32_close_adapter_posts_wm_close_only_to_a_live_hwnd() -> None:
+    calls: list[tuple[int, int, int, int]] = []
+    api = object.__new__(Win32EdgeWindowApi)
+    api._user32 = SimpleNamespace(
+        PostMessageW=lambda hwnd, message, wparam, lparam: calls.append(
+            (hwnd, message, wparam, lparam)
+        ) or 1
+    )
+    api.is_window = lambda hwnd: hwnd == 500
+
+    assert api.post_close_message(500)
+    assert not api.post_close_message(900)
+    assert calls == [(500, WM_CLOSE, 0, 0)]
 
 
 def test_start_failure_removes_only_the_new_owned_profile(edge_temp_dir: Path) -> None:

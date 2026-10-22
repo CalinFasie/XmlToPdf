@@ -141,7 +141,7 @@ def test_shutdown_returns_generic_confirmation_only_when_scheduled() -> None:
     assert response.status_code == 202
     assert response.get_json() == {
         "ok": True,
-        "message": "XmlToPdf a fost oprită. Poți închide această filă.",
+        "message": "Comanda de închidere a fost acceptată. XmlToPdf se va închide.",
     }
     assert response.headers["Cache-Control"] == "no-store"
 

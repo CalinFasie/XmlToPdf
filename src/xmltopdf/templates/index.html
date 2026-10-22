@@ -77,7 +77,7 @@
             }
             status.textContent = result.message;
           } catch (_error) {
-            status.textContent = "Oprirea nu a putut fi confirmată. Poți închide aplicația din system tray.";
+            status.textContent = "Oprirea nu a putut fi confirmată. Dacă fereastra rămâne deschisă, poți folosi system tray.";
             shutdownButton.disabled = false;
           }
         });

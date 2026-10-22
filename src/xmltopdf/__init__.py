@@ -160,7 +160,7 @@ def create_app(
 
             response = jsonify(
                 ok=True,
-                message="XmlToPdf a fost oprită. Poți închide această filă.",
+                message="Comanda de închidere a fost acceptată. XmlToPdf se va închide.",
             )
             try:
                 scheduled = shutdown_scheduler(response)

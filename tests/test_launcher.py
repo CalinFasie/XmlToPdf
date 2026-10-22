@@ -271,6 +271,59 @@ def test_launcher_controller_stop_is_idempotent() -> None:
     assert events.count("tray_stop") == 1
 
 
+def test_concurrent_stop_requests_close_the_window_once_and_do_not_block_callers() -> None:
+    events: list[str] = []
+    server = FakeServer(events)
+    thread = FakeThread(
+        target=lambda: None,
+        name="test-server",
+        daemon=False,
+        events=events,
+    )
+    thread.start()
+    controller = launcher.LauncherController(server, thread)
+    close_started = threading.Event()
+    allow_close = threading.Event()
+
+    def close_window() -> bool:
+        events.append("edge_close")
+        close_started.set()
+        assert allow_close.wait(2)
+        return True
+
+    controller.configure_edge_shutdown(close_window, lambda: None)
+    assert controller.request_stop()
+    assert close_started.wait(1)
+    assert controller.request_stop()
+    allow_close.set()
+    assert controller.wait_for_requested_shutdown(2)
+
+    assert events.count("edge_close") == 1
+    assert events.count("shutdown") == 1
+    assert events.count("server_close") == 1
+
+
+def test_failed_edge_close_reports_error_and_keeps_server_and_tray_active() -> None:
+    events: list[str] = []
+    reports: list[str] = []
+    server = FakeServer(events)
+    thread = FakeThread(
+        target=lambda: None,
+        name="test-server",
+        daemon=False,
+        events=events,
+    )
+    thread.start()
+    controller = launcher.LauncherController(server, thread)
+    controller.configure_edge_shutdown(lambda: False, lambda: reports.append("close_failed"))
+
+    assert controller.request_stop()
+    assert controller.wait_for_requested_shutdown(2)
+    assert reports == ["close_failed"]
+    assert not controller._stop_started
+    assert "shutdown" not in events and "server_close" not in events
+
+
 def test_web_shutdown_sends_response_then_stops_server_and_releases_port(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -280,9 +333,16 @@ def test_web_shutdown_sends_response_then_stops_server_and_releases_port(
     monkeypatch.setattr(xmltopdf, "LOCAL_PORT", port)
 
     controller_reference: dict[str, launcher.LauncherController] = {}
+    shutdown_order: list[str] = []
 
     def schedule_shutdown(response: Any) -> bool:
-        return controller_reference["controller"].stop_after_response(response)
+        class ResponseCloseProxy:
+            def call_on_close(self, callback: Any) -> None:
+                response.call_on_close(
+                    lambda: (shutdown_order.append("response_closed"), callback())
+                )
+
+        return controller_reference["controller"].stop_after_response(ResponseCloseProxy())
 
     app = create_app(enable_shutdown=True, shutdown_scheduler=schedule_shutdown)
     server = launcher.create_local_server(
@@ -291,6 +351,13 @@ def test_web_shutdown_sends_response_then_stops_server_and_releases_port(
         app,
         request_handler=launcher.QuietRequestHandler,
     )
+    original_shutdown = server.shutdown
+
+    def record_shutdown() -> None:
+        shutdown_order.append("shutdown")
+        original_shutdown()
+
+    server.shutdown = record_shutdown
     server_thread = threading.Thread(
         target=server.serve_forever,
         name="test-web-shutdown-server",
@@ -299,6 +366,10 @@ def test_web_shutdown_sends_response_then_stops_server_and_releases_port(
     tray_events: list[str] = []
     icon = FakeIcon(tray_events, lambda: None, lambda: None)
     controller = launcher.LauncherController(server, server_thread, icon=icon)
+    controller.configure_edge_shutdown(
+        lambda: shutdown_order.append("edge_close") or True,
+        lambda: pytest.fail("The dedicated Edge close should succeed."),
+    )
     controller_reference["controller"] = controller
     server_thread.start()
 
@@ -333,12 +404,14 @@ def test_web_shutdown_sends_response_then_stops_server_and_releases_port(
         assert response.status == 202
         assert json.loads(response_body) == {
             "ok": True,
-            "message": "XmlToPdf a fost oprită. Poți închide această filă.",
+            "message": "Comanda de închidere a fost acceptată. XmlToPdf se va închide.",
         }
         server_thread.join(timeout=3)
         assert not server_thread.is_alive()
         assert controller._stop_finished.wait(timeout=3)
         assert tray_events == ["tray_stop"]
+        assert shutdown_order.index("response_closed") < shutdown_order.index("edge_close")
+        assert shutdown_order.index("edge_close") < shutdown_order.index("shutdown")
         with socket.socket() as probe:
             probe.bind((LOCAL_HOST, port))
     finally:
@@ -484,6 +557,10 @@ def test_default_launcher_uses_one_edge_session_for_startup_and_tray_open(
         def cleanup(self) -> None:
             events.append("edge_session_cleanup")
 
+        def close_window(self, *, timeout: float) -> bool:
+            events.append(f"edge_close:{timeout}")
+            return True
+
     sessions: list[FakeSession] = []
 
     def session_factory(**kwargs: Any) -> FakeSession:
@@ -521,6 +598,60 @@ def test_default_launcher_uses_one_edge_session_for_startup_and_tray_open(
     assert events.index("tray_stop") < events.index("edge_session_cleanup")
     assert events.count("shutdown") == 1
     assert events.count("server_close") == 1
+    assert messages == []
+
+
+def test_tray_exit_closes_dedicated_edge_before_stopping_server(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    messages: list[tuple[str, str, int]] = []
+    server = FakeServer(events)
+    monkeypatch.setattr(
+        launcher,
+        "find_edge_executable",
+        lambda: Path("C:/Program Files/Microsoft/Edge/Application/msedge.exe"),
+    )
+
+    class FakeSession:
+        def __init__(self, **_kwargs: Any) -> None:
+            pass
+
+        def open_or_activate(self, _url: str) -> None:
+            events.append("edge_open")
+
+        def close_window(self, *, timeout: float) -> bool:
+            events.append("edge_close")
+            return timeout == launcher.EDGE_CLOSE_TIMEOUT_SECONDS
+
+        def cleanup(self) -> None:
+            events.append("edge_cleanup")
+
+    class WaitForStopIcon(FakeIcon):
+        def run(self) -> None:
+            self.exit_action()
+            deadline = time.monotonic() + 2
+            while "tray_stop" not in self.events and time.monotonic() < deadline:
+                time.sleep(0.005)
+            self.events.append("tray_run_finished")
+
+    result = launcher.run_windowed_launcher(
+        server_factory=lambda *_a, **_k: server,
+        thread_factory=lambda **kwargs: FakeThread(**kwargs, events=events),
+        readiness_check=lambda **_kwargs: True,
+        edge_session_factory=FakeSession,
+        tray_factory=lambda open_action, exit_action: WaitForStopIcon(
+            events, open_action, exit_action
+        ),
+        message_box=lambda *args: messages.append(args),
+        mutex_acquirer=_owned_mutex,
+        mutex_releaser=lambda _mutex: None,
+    )
+
+    assert result == 0
+    assert events.index("edge_close") < events.index("shutdown")
+    assert events.index("shutdown") < events.index("tray_stop")
+    assert "edge_cleanup" in events
     assert messages == []
 
 

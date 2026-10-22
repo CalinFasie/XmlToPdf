@@ -19,6 +19,7 @@ PROFILE_PREFIX = "xmltopdf-edge-"
 PROFILE_MARKER = ".xmltopdf-owned-profile"
 PROFILE_MARKER_CONTENT = "XmlToPdf temporary Edge profile v1\n"
 WINDOW_CLASS = "Chrome_WidgetWin_1"
+WM_CLOSE = 0x0010
 PROCESS_POLL_SECONDS = 0.1
 WINDOW_CLOSE_GRACE_SECONDS = 1.0
 WINDOW_STARTUP_TIMEOUT_SECONDS = 20.0
@@ -52,6 +53,8 @@ class EdgeWindowApi(Protocol):
     def is_window(self, hwnd: int) -> bool: ...
 
     def activate_window(self, hwnd: int) -> bool: ...
+
+    def post_close_message(self, hwnd: int) -> bool: ...
 
 
 class Win32EdgeWindowApi:
@@ -105,6 +108,13 @@ class Win32EdgeWindowApi:
         self._user32.ShowWindow.restype = wintypes.BOOL
         self._user32.SetForegroundWindow.argtypes = (wintypes.HWND,)
         self._user32.SetForegroundWindow.restype = wintypes.BOOL
+        self._user32.PostMessageW.argtypes = (
+            wintypes.HWND,
+            wintypes.UINT,
+            wintypes.WPARAM,
+            wintypes.LPARAM,
+        )
+        self._user32.PostMessageW.restype = wintypes.BOOL
 
     def snapshot_processes(self) -> Mapping[int, ProcessInfo]:
         from ctypes import wintypes
@@ -184,6 +194,12 @@ class Win32EdgeWindowApi:
         self._user32.ShowWindow(hwnd, self.SW_RESTORE)
         return bool(self._user32.SetForegroundWindow(hwnd))
 
+    def post_close_message(self, hwnd: int) -> bool:
+        """Ask one already-validated window to close through its normal UI path."""
+        if not self.is_window(hwnd):
+            return False
+        return bool(self._user32.PostMessageW(hwnd, WM_CLOSE, 0, 0))
+
 
 def discover_edge_processes(
     root_pid: int,
@@ -223,6 +239,7 @@ class EdgeWindowTracker:
         self.monotonic = monotonic
         self.related_pids: set[int] = {root_pid}
         self.hwnd: int | None = None
+        self.window_pid: int | None = None
         self._missing_since: float | None = None
 
     def poll(self) -> str:
@@ -262,6 +279,7 @@ class EdgeWindowTracker:
             return "waiting"
         candidates.sort(key=lambda window: (window.pid != self.root_pid, window.hwnd))
         self.hwnd = candidates[0].hwnd
+        self.window_pid = candidates[0].pid
         return "opened"
 
 
@@ -476,6 +494,66 @@ class EdgeAppSession:
                         pass
                     return
             self._monitor_stop.wait(self.poll_interval)
+
+    def close_window(self, timeout: float = 5.0) -> bool:
+        """Close only the HWND tracked for this launch and wait for its disappearance.
+
+        The caller must run this bounded wait on a worker thread, never in the tray
+        event callback or an HTTP response thread.
+        """
+        tracker = self.tracker
+        if tracker is None or self.root_pid is None:
+            return True
+
+        deadline = self.monotonic() + max(0.0, timeout)
+        while tracker.hwnd is None and not self._window_ready.is_set():
+            if self._monitor_failed.is_set():
+                return False
+            if not self._related_edge_processes_alive():
+                return True
+            remaining = deadline - self.monotonic()
+            if remaining <= 0:
+                return False
+            self._window_ready.wait(min(self.poll_interval, remaining))
+
+        hwnd = tracker.hwnd
+        window_pid = tracker.window_pid
+        if hwnd is None or window_pid is None:
+            return not self._related_edge_processes_alive()
+
+        if not self.api.is_window(hwnd):
+            return True
+
+        try:
+            matching_window = next(
+                (window for window in self.api.enumerate_windows() if window.hwnd == hwnd),
+                None,
+            )
+        except Exception:
+            return False
+
+        # HWNDs can be reused. Require the exact tracked PID and Edge window class,
+        # and confirm that PID still belongs to the process ancestry we discovered.
+        if (
+            matching_window is None
+            or matching_window.pid != window_pid
+            or matching_window.class_name != WINDOW_CLASS
+            or window_pid not in tracker.related_pids
+        ):
+            return False
+
+        try:
+            close_sent = self.api.post_close_message(hwnd)
+        except Exception:
+            return False
+        if not close_sent and self.api.is_window(hwnd):
+            return False
+
+        while self.monotonic() < deadline:
+            if not self.api.is_window(hwnd):
+                return True
+            self.sleep(min(self.poll_interval, max(0.0, deadline - self.monotonic())))
+        return not self.api.is_window(hwnd)
 
     def _release_finished_session(self) -> None:
         if self.profile_path is None:

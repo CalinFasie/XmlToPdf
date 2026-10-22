@@ -28,6 +28,7 @@ MB_OK = 0x00000000
 MB_ICONERROR = 0x00000010
 MB_ICONWARNING = 0x00000030
 MB_ICONINFORMATION = 0x00000040
+EDGE_CLOSE_TIMEOUT_SECONDS = 5.0
 
 
 EdgeUnavailableError = EdgeSessionError
@@ -91,6 +92,22 @@ class LauncherController:
         self._stop_finished = threading.Event()
         self._stop_started = False
         self._stop_error: BaseException | None = None
+        self._shutdown_lock = threading.Condition()
+        self._shutdown_worker_active = False
+        self._window_close_started = False
+        self._pending_responses = 0
+        self._edge_window_closer: Callable[[], bool] | None = None
+        self._shutdown_failure_reporter: Callable[[], None] | None = None
+
+    def configure_edge_shutdown(
+        self,
+        close_window: Callable[[], bool],
+        report_failure: Callable[[], None],
+    ) -> None:
+        """Register the dedicated-window close operation for launcher shutdown."""
+        with self._shutdown_lock:
+            self._edge_window_closer = close_window
+            self._shutdown_failure_reporter = report_failure
 
     def open_interface(
         self,
@@ -142,23 +159,81 @@ class LauncherController:
             self._stop_finished.set()
 
     def stop_after_response(self, response: Any) -> bool:
-        """Schedule the shared stop path after a WSGI response has been closed."""
-        response_closed = threading.Event()
-        response.call_on_close(response_closed.set)
+        """Schedule shutdown only after the WSGI response has been transmitted."""
+        with self._shutdown_lock:
+            if self._window_close_started or self._stop_started:
+                return False
+            self._pending_responses += 1
 
-        def stop_when_response_is_closed() -> None:
-            response_closed.wait()
-            self.stop()
+        def response_closed() -> None:
+            with self._shutdown_lock:
+                self._pending_responses = max(0, self._pending_responses - 1)
+                self._shutdown_lock.notify_all()
 
-        stop_thread = threading.Thread(
-            target=stop_when_response_is_closed,
-            name="XmlToPdf-web-shutdown",
-            daemon=False,
-        )
         try:
-            stop_thread.start()
+            response.call_on_close(response_closed)
         except Exception:
+            response_closed()
             return False
+        return self.request_stop()
+
+    def request_stop(self) -> bool:
+        """Start the shared, nonblocking shutdown path used by tray and web UI."""
+        with self._shutdown_lock:
+            if self._stop_started or self._shutdown_worker_active:
+                return True
+            self._shutdown_worker_active = True
+            worker = threading.Thread(
+                target=self._run_requested_shutdown,
+                name="XmlToPdf-controlled-shutdown",
+                daemon=False,
+            )
+            try:
+                worker.start()
+            except Exception:
+                self._shutdown_worker_active = False
+                self._shutdown_lock.notify_all()
+                return False
+            return True
+
+    def _run_requested_shutdown(self) -> None:
+        try:
+            with self._shutdown_lock:
+                while self._pending_responses and not self._stop_started:
+                    self._shutdown_lock.wait()
+                if self._stop_started:
+                    return
+                self._window_close_started = True
+                close_window = self._edge_window_closer
+
+            if close_window is not None and not close_window():
+                reporter = self._shutdown_failure_reporter
+                if reporter is not None:
+                    reporter()
+                return
+            self.stop()
+        except Exception:
+            reporter = self._shutdown_failure_reporter
+            if reporter is not None:
+                try:
+                    reporter()
+                except Exception:
+                    pass
+        finally:
+            with self._shutdown_lock:
+                self._window_close_started = False
+                self._shutdown_worker_active = False
+                self._shutdown_lock.notify_all()
+
+    def wait_for_requested_shutdown(self, timeout: float | None = None) -> bool:
+        """Wait for a test or orderly launcher teardown, never from a tray callback."""
+        deadline = None if timeout is None else time.monotonic() + timeout
+        with self._shutdown_lock:
+            while self._shutdown_worker_active:
+                remaining = None if deadline is None else deadline - time.monotonic()
+                if remaining is not None and remaining <= 0:
+                    return False
+                self._shutdown_lock.wait(remaining)
         return True
 
 
@@ -368,6 +443,17 @@ def run_windowed_launcher(
                 on_window_closed=controller.stop,
                 on_monitor_failure=report_edge_monitor_failure,
             )
+            close_window = getattr(edge_session, "close_window", None)
+            if callable(close_window):
+                controller.configure_edge_shutdown(
+                    lambda: bool(close_window(timeout=EDGE_CLOSE_TIMEOUT_SECONDS)),
+                    lambda: show_message(
+                        "Fereastra XmlToPdf nu a putut fi închisă. Aplicația și serverul au rămas active; "
+                        "încearcă din nou sau închide fereastra Edge dedicată cu X.",
+                        "XmlToPdf",
+                        MB_OK | MB_ICONWARNING,
+                    ),
+                )
         edge_session.open_or_activate(url)
 
     def schedule_web_shutdown(response: Any) -> bool:
@@ -413,7 +499,7 @@ def run_windowed_launcher(
                 edge_opener=launch_browser,
                 message_box=show_message,
             ),
-            controller.stop,
+            controller.request_stop,
         )
         controller.icon = tray_icon
 
