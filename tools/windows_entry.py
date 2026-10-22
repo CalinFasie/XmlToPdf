@@ -1,4 +1,4 @@
-"""PyInstaller entry point for the portable Windows console application."""
+"""PyInstaller entry point for the windowed Windows system-tray application."""
 
 from xmltopdf.launcher import main
 

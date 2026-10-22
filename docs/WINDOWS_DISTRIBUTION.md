@@ -1,43 +1,50 @@
 # Distribuția Windows
 
-## Pachetul portabil
+## Pachetul onefile
 
-Task 006 folosește un EXE cu consolă construit cu PyInstaller `--onedir`. Fișierul țintă este `dist\XmlToPdf\XmlToPdf.exe`, iar distribuția este folderul complet `dist\XmlToPdf`. Acesta conține runtime-ul Python, pachetele Flask/Werkzeug/Jinja2, lxml și fișierele aplicației. Microsoft Edge trebuie instalat separat; Python nu.
+Distribuția este un singur `dist\XmlToPdf.exe`, construit cu PyInstaller `--onefile` și `console=False`. Executabilul include runtime-ul Python, Flask/Werkzeug, lxml, Jinja2, Pillow, pystray, șabloanele HTML și CSS-ul local. Copiază numai EXE-ul în directorul ales. Nu este necesar Python separat; Microsoft Edge trebuie instalat.
 
-Pachetul nu este MSI/Setup, nu se instalează în Program Files și nu se înregistrează în Windows. Copiază folderul de distribuție ca unitate și păstrează structura din interior. Fișierul `.spec` este versiunea controlată a rețetei de build. `build/` și `dist/` sunt artefacte generate și ignorate de Git.
+PyInstaller extrage componentele sale într-un director temporar la pornire, ceea ce poate prelungi pornirea față de `--onedir`. Directorul respectiv conține codul și resursele pachetului. Încărcarea XML este procesată în memorie de aplicație; XML-urile și alte documente ale utilizatorului nu sunt scrise în directorul de extragere. Nu folosi acel director pentru date persistente.
 
 ## Construirea
 
-Folosește Windows și un mediu virtual cu dependențele de dezvoltare instalate. Din rădăcina repository-ului, rulează:
+Folosește Windows și mediul virtual al repository-ului. Scriptul rezolvă căile față de propria locație și poate fi lansat din orice director:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-.\.venv\Scripts\python.exe -m PyInstaller --clean --noconfirm --distpath .\dist --workpath .\build .\XmlToPdf.spec
+.\tools\build_windows.ps1
 ```
 
-Specificația caută sursele relativ la fișierul `.spec`, include toate șabloanele și resursele statice ale pachetului, colectează bibliotecile dinamice lxml și exclude testele. Build-ul nu include mostre private. Nu comite binarele din `dist/`.
+Specificația `XmlToPdf.spec` activează onefile și fereastra fără consolă, include șabloanele/CSS-ul și dependențele tray, colectează bibliotecile dinamice lxml și exclude testele. Rezultatul este `dist\XmlToPdf.exe`. `build/` și `dist/` sunt artefacte locale și sunt ignorate de Git; nu comite executabilul.
 
-## Pornire și oprire
+## Pornire și control din system tray
 
-Pornește `dist\XmlToPdf\XmlToPdf.exe` din Explorer sau dintr-un terminal. Launcherul creează aplicația prin `create_app()`, leagă serverul la `127.0.0.1:5000`, așteaptă un răspuns HTTP local și apoi pornește explicit `msedge.exe` cu pagina aplicației. Nu folosește browserul implicit și nu pornește un alt port.
+La prima pornire, launcherul creează o singură instanță, construiește aplicația prin `create_app()`, leagă serverul Werkzeug exclusiv la `127.0.0.1:5000`, așteaptă un răspuns HTTP local și apoi încearcă să deschidă pagina în Microsoft Edge. Iconul din zona de notificări oferă:
 
-- Dacă portul 5000 este ocupat, launcherul afișează un mesaj și se încheie fără a deschide browserul.
-- Dacă Edge lipsește sau nu pornește, serverul rămâne activ, iar URL-ul este afișat pentru a-l deschide manual în Microsoft Edge.
-- `Ctrl+C` închide serverul și eliberează portul; procesul Edge nu este închis.
-- Închiderea ferestrei consolei încheie procesul launcherului; sistemul de operare închide socketul, iar Edge rămâne deschis. Pentru oprirea controlată, folosește `Ctrl+C`.
+- **Deschide XmlToPdf** — lansează Edge către pagina locală. Nu închide și nu controlează alte ferestre sau procese Edge.
+- **Închide XmlToPdf** — oprește controlat serverul, eliberează portul, așteaptă threadul serverului și elimină iconul.
 
-Aplicația păstrează Host, Origin, CSRF, limita de încărcare de 10 MiB, parserul XML securizat și lipsa stocării intenționate. XML-ul este procesat local în memorie; factura nu este trimisă către servicii externe.
+Închiderea Edge nu oprește serverul; folosește comanda din tray. Dacă Edge nu este disponibil, aplicația rămâne activă, iar un mesaj afișează URL-ul local pentru deschidere manuală. O a doua lansare a XmlToPdf este detectată prin mutex și îndrumă utilizatorul către iconul existent. Dacă portul 5000 este ocupat de un proces necunoscut, aplicația afișează o eroare și nu lansează Edge.
+
+Aplicația nu pornește automat odată cu Windows și nu instalează servicii sau înregistrări în registry. Comanda de dezvoltare `python -m xmltopdf` rămâne disponibilă și pornește serverul local pentru oprire cu `Ctrl+C`.
+
+## Securitate și confidențialitate
+
+Serverul rămâne pe loopback. Se păstrează verificările Host, Origin, CSRF și plafonul de 10 MiB; parserul XML securizat, șabloanele escapate și răspunsurile `no-store` rămân neschimbate. Nu se folosesc resurse externe. Jurnalizarea HTTP a launcherului nu include URL-uri de cereri, nume de fișiere sau date de factură. Erorile de pornire sunt prezentate prin mesaje Windows generice, fără traceback.
 
 ## Verificare și limite
 
-Testele automatizate folosesc doar date sintetice și simulează deschiderea Edge și ciclul de viață al serverului. Build-ul pe Windows, pornirea dintr-un director de lucru diferit, deschiderea Edge, încărcarea XML-ului sintetic, imprimarea și scenariul de port ocupat trebuie verificate înainte de acceptarea pachetului. Confirmarea finală că aplicația funcționează pe un calculator Windows fără Python separat necesită o astfel de verificare manuală; testele automate nu demonstrează acest lucru.
+Testele automatizate folosesc XML-uri sintetice și simulează Edge, system tray și API-urile Windows. Ele verifică secvența pornire server → browser/tray și oprirea controlată; un test de integrare pornește serverul Werkzeug pe un port loopback efemer și confirmă că portul poate fi legat din nou după oprire.
 
-### Rezultatele verificării Task 006
+### Task 006B — verificări executate
 
-- Build-ul `--onedir` a reușit pe Windows 11 cu Python 3.13.14 și PyInstaller 6.22.3; artefactul este `dist\XmlToPdf\XmlToPdf.exe`.
-- Folderul construit conține 126 fișiere, însumează 31.145.568 octeți și include runtime-ul Python, șabloanele și CSS-ul. Verificarea nu a găsit XML, PDF, teste sau `.venv` în distribuție.
-- `pytest`: 106 teste trecute; `git diff --check`: fără erori.
-- Portul `127.0.0.1:5000` era deja ocupat înaintea testului. Build-ul final a fost pornit din alt director și a afișat mesajul de port ocupat, apoi s-a închis fără traceback și fără a porni Edge ori un al doilea server.
-- Testele automate acoperă upload-ul, randarea, securitatea, resource lookup independent de directorul curent, deschiderea Edge simulată și închiderea serverului.
-- Pornirea cu port liber, verificarea vizuală a ferestrei Edge, încărcarea prin interfața Edge și imprimarea PDF nu au putut fi atribuite build-ului final, deoarece portul fix era ocupat și Edge nu era disponibil pentru control vizual în sesiunea de test.
-- Nu a fost disponibil un calculator fără Python instalat separat. Acceptarea finală a folderului portabil rămâne condiționată de verificarea manuală pe un astfel de calculator.
+- `pytest`: 111 teste trecute. Testul de socket local a fost rulat cu permisiunea necesară pentru loopback.
+- `git diff --check`: fără erori.
+- `tools/build_windows.ps1` a fost lansat din `D:\Github`, în afara repository-ului. Build-ul a reușit cu Windows 11, Python 3.13.14 și PyInstaller 6.22.3.
+- Rezultatul este `dist\XmlToPdf.exe` (24.032.259 octeți). Executabilul are subsistemul Windows GUI (`Subsystem=2`), fără subsistem de consolă. După eliminarea folderului onedir generat anterior, `dist` conține numai acest EXE.
+- Arhiva executabilului conține runtime-ul Python, backendul Windows pystray și șabloanele/CSS-ul. Inspecția nu a găsit teste, fixture-uri, XML-uri sau PDF-uri în pachet.
+- Testele verifică încărcarea șabloanelor dintr-un director onefile simulat, legarea acțiunilor din meniu, mutexul și eliberarea portului.
+
+### Verificări manuale rămase
+
+În această sesiune nu a fost controlabilă interfața nativă Microsoft Edge/system tray. Nu au fost executate dublu-click-ul pe o copie izolată a EXE-ului, verificarea vizuală a meniului, încărcarea prin Edge, Print / Save as PDF, oprirea efectivă din tray sau repornirea. Nu a fost disponibil un calculator fără Python instalat. Aceste verificări rămân necesare înaintea distribuției finale.

@@ -1,6 +1,6 @@
 # XmlToPdf
 
-**Stadiu:** fundația Flask, parserul UBL cu modelul intern, încărcarea securizată în memorie, afișarea HTML compactă, fluxul de imprimare A4 landscape din browser și launcherul Windows portabil PyInstaller `--onedir` sunt implementate. Utilizatorul a confirmat manual un PDF de o pagină pentru factura de referință; regulile generale de paginare rămân deschise. Generarea PDF în backend nu este implementată.
+**Stadiu:** fundația Flask, parserul UBL cu modelul intern, încărcarea securizată în memorie, afișarea HTML compactă, fluxul de imprimare A4 landscape din browser și launcherul Windows PyInstaller `--onefile`, fără consolă și cu system tray, sunt implementate. Utilizatorul a confirmat manual un PDF de o pagină pentru factura de referință; regulile generale de paginare rămân deschise. Generarea PDF în backend nu este implementată.
 
 Repository: https://github.com/CalinFasie/XmlToPdf<br>
 Director local vizat: `D:\Github\XmlToPdf`
@@ -81,16 +81,16 @@ Serverul ascultă numai pe `127.0.0.1:5000`, cu modul debug și reloader dezacti
 
 ### Build și utilizare Windows fără Python separat
 
-Pentru build, instalează dependența PyInstaller împreună cu uneltele de dezvoltare, apoi rulează din rădăcina repository-ului:
+Instalează PyInstaller, pystray și celelalte dependențe de build din rădăcina repository-ului. Apoi poți apela scriptul de build din orice director; el rezolvă căile relativ la fișierul propriu:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-.\.venv\Scripts\python.exe -m PyInstaller --clean --noconfirm --distpath .\dist --workpath .\build .\XmlToPdf.spec
+.\tools\build_windows.ps1
 ```
 
-Rezultatul este `dist\XmlToPdf\XmlToPdf.exe`. Pentru utilizare, copiază **întregul folder** `dist\XmlToPdf` în locația dorită și pornește `XmlToPdf.exe`. Nu muta sau distribui EXE-ul singur. Calculatorul țintă trebuie să aibă Windows și Microsoft Edge instalat, dar nu are nevoie de Python, Flask sau lxml instalate separat.
+Build-ul produce un singur fișier `dist\XmlToPdf.exe`. Copiază numai EXE-ul în directorul dorit; nu este necesar un folder `_internal`. La dublu-click, aplicația pornește fără fereastră CMD, leagă serverul la `127.0.0.1:5000`, așteaptă răspunsul local și apoi deschide Microsoft Edge. Iconul din system tray permite redeschiderea interfeței și oprirea controlată. Închiderea ferestrei Edge nu oprește serverul.
 
-Launcherul pornește serverul numai la `127.0.0.1:5000`, verifică dacă aplicația răspunde și apoi deschide Edge fără a schimba browserul implicit. `Ctrl+C` oprește serverul controlat; închiderea ferestrei consolei încheie procesul launcherului, iar Windows eliberează socketul local. Edge rămâne deschis. Pentru detalii și starea verificărilor, vezi [`docs/WINDOWS_DISTRIBUTION.md`](docs/WINDOWS_DISTRIBUTION.md).
+Prima pornire poate dura mai mult decât varianta `--onedir`, deoarece PyInstaller extrage temporar bibliotecile incluse. Aplicația nu salvează XML-uri sau alte documente ale utilizatorului în directorul temporar; XML-ul încărcat este procesat în memorie. Calculatorul țintă trebuie să aibă Windows și Microsoft Edge instalat, dar nu Python, Flask sau lxml instalate separat. Pentru detalii și limitele verificării, vezi [`docs/WINDOWS_DISTRIBUTION.md`](docs/WINDOWS_DISTRIBUTION.md).
 
 ## Date de referință și confidențialitate
 

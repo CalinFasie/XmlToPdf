@@ -1,7 +1,8 @@
-"""Windows console launcher for the local XmlToPdf web application."""
+"""Windows system-tray launcher for the local XmlToPdf web application."""
 
 from __future__ import annotations
 
+import ctypes
 import errno
 import http.client
 import os
@@ -10,6 +11,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +22,12 @@ from . import LOCAL_HOST, LOCAL_PORT, create_app
 APP_URL = f"http://{LOCAL_HOST}:{LOCAL_PORT}/"
 STARTUP_TIMEOUT_SECONDS = 10.0
 READINESS_POLL_SECONDS = 0.1
+MUTEX_NAME = r"Local\CalinFasie.XmlToPdf"
+ERROR_ALREADY_EXISTS = 183
+MB_OK = 0x00000000
+MB_ICONERROR = 0x00000010
+MB_ICONWARNING = 0x00000030
+MB_ICONINFORMATION = 0x00000040
 
 
 class EdgeUnavailableError(RuntimeError):
@@ -30,8 +38,12 @@ class PortInUseError(RuntimeError):
     """Raised when another process already owns the configured loopback port."""
 
 
+class SingleInstanceError(RuntimeError):
+    """Raised when Windows cannot create the single-instance mutex."""
+
+
 class QuietRequestHandler(WSGIRequestHandler):
-    """Avoid writing request details to the launcher console."""
+    """Avoid writing request details to the launcher output streams."""
 
     def log(self, _type: str, _message: str, *args: Any) -> None:
         return
@@ -41,6 +53,8 @@ class LocalThreadedWSGIServer(ThreadedWSGIServer):
     """Threaded Werkzeug server that does not allow another process to reuse its port."""
 
     allow_reuse_address = False
+    daemon_threads = False
+    block_on_close = True
 
     def server_bind(self) -> None:
         try:
@@ -52,6 +66,66 @@ class LocalThreadedWSGIServer(ThreadedWSGIServer):
             if _port_is_occupied(error):
                 raise PortInUseError from None
             raise RuntimeError from None
+
+
+@dataclass(frozen=True)
+class SingleInstanceHandle:
+    handle: int
+    owns_mutex: bool
+    already_running: bool
+
+
+class LauncherController:
+    """Own the server lifecycle and connect tray actions to it."""
+
+    def __init__(
+        self,
+        server: Any,
+        server_thread: threading.Thread,
+        *,
+        icon: Any | None = None,
+    ) -> None:
+        self.server = server
+        self.server_thread = server_thread
+        self.icon = icon
+        self._stop_lock = threading.Lock()
+        self._stopped = False
+
+    def open_interface(
+        self,
+        *,
+        edge_opener: Callable[[str], None],
+        message_box: Callable[[str, str, int], None],
+    ) -> None:
+        """Open the local page in Edge without touching any other Edge process."""
+        try:
+            edge_opener(APP_URL)
+        except (EdgeUnavailableError, OSError):
+            message_box(
+                "Microsoft Edge nu a putut fi deschis. Serverul XmlToPdf rulează; "
+                f"deschide manual {APP_URL} în Microsoft Edge.",
+                "XmlToPdf",
+                MB_OK | MB_ICONWARNING,
+            )
+
+    def stop(self) -> None:
+        """Stop the WSGI server, release its socket, join its thread, and hide the tray icon."""
+        with self._stop_lock:
+            if self._stopped:
+                return
+            self._stopped = True
+
+        try:
+            if self.server_thread.is_alive():
+                self.server.shutdown()
+        finally:
+            try:
+                self.server.server_close()
+            finally:
+                if self.server_thread.is_alive():
+                    self.server_thread.join()
+                if self.icon is not None:
+                    self.icon.stop()
 
 
 def create_local_server(
@@ -92,7 +166,7 @@ def open_edge(
     environ: Mapping[str, str] | None = None,
     popen: Callable[..., Any] | None = None,
 ) -> None:
-    """Start Microsoft Edge directly, without shell expansion or default-browser changes."""
+    """Start Edge directly, without shell expansion or default-browser changes."""
     executable = find_edge_executable(environ=environ)
     if executable is None:
         raise EdgeUnavailableError("Microsoft Edge was not found.")
@@ -134,99 +208,203 @@ def wait_until_ready(
         pause(min(READINESS_POLL_SECONDS, remaining))
 
 
+def create_tray_icon(
+    open_action: Callable[[], None],
+    exit_action: Callable[[], None],
+) -> Any:
+    """Build the in-memory icon and menu without writing user data to disk."""
+    import pystray
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGBA", (64, 64), (35, 83, 125, 255))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((5, 5, 59, 59), radius=10, outline=(255, 255, 255, 255), width=3)
+    draw.text((19, 14), "X", fill=(255, 255, 255, 255), stroke_width=1)
+
+    menu = pystray.Menu(
+        pystray.MenuItem("Deschide XmlToPdf", lambda _icon, _item: open_action()),
+        pystray.MenuItem("Închide XmlToPdf", lambda _icon, _item: exit_action()),
+    )
+    return pystray.Icon("XmlToPdf", image, "XmlToPdf", menu)
+
+
+def show_windows_message(message: str, title: str, flags: int) -> None:
+    """Show a native Windows message without relying on stdout or a console."""
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    message_box = user32.MessageBoxW
+    message_box.argtypes = (ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint)
+    message_box.restype = ctypes.c_int
+    message_box(None, message, title, flags)
+
+
+def acquire_single_instance() -> SingleInstanceHandle:
+    """Create a per-user-session mutex so a second launcher cannot start a server."""
+    try:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        create_mutex = kernel32.CreateMutexW
+        create_mutex.argtypes = (ctypes.c_void_p, ctypes.c_int, ctypes.c_wchar_p)
+        create_mutex.restype = ctypes.c_void_p
+        ctypes.set_last_error(0)
+        handle = create_mutex(None, True, MUTEX_NAME)
+        if not handle:
+            raise SingleInstanceError
+        already_running = ctypes.get_last_error() == ERROR_ALREADY_EXISTS
+        return SingleInstanceHandle(
+            handle=handle,
+            owns_mutex=not already_running,
+            already_running=already_running,
+        )
+    except SingleInstanceError:
+        raise
+    except Exception as error:
+        raise SingleInstanceError from error
+
+
+def release_single_instance(mutex: SingleInstanceHandle) -> None:
+    """Release and close the mutex handle, including a handle to an existing mutex."""
+    try:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.ReleaseMutex.argtypes = (ctypes.c_void_p,)
+        kernel32.ReleaseMutex.restype = ctypes.c_int
+        kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
+        kernel32.CloseHandle.restype = ctypes.c_int
+        if mutex.owns_mutex:
+            kernel32.ReleaseMutex(mutex.handle)
+        kernel32.CloseHandle(mutex.handle)
+    except Exception:
+        return
+
+
 def _port_is_occupied(error: OSError) -> bool:
     return error.errno == errno.EADDRINUSE or getattr(error, "winerror", None) == 10048
 
 
-def run_launcher(
+def run_windowed_launcher(
     *,
     app_factory: Callable[[], Any] | None = None,
     server_factory: Callable[..., Any] | None = None,
     thread_factory: Callable[..., Any] | None = None,
     readiness_check: Callable[..., bool] | None = None,
     edge_opener: Callable[[str], None] | None = None,
-    output: Callable[[str], None] | None = None,
+    tray_factory: Callable[[Callable[[], None], Callable[[], None]], Any] | None = None,
+    message_box: Callable[[str, str, int], None] | None = None,
+    mutex_acquirer: Callable[[], SingleInstanceHandle] | None = None,
+    mutex_releaser: Callable[[SingleInstanceHandle], None] | None = None,
 ) -> int:
-    """Run the local server, wait for readiness, then open Edge and serve until stopped."""
+    """Run the local server and tray event loop without console output."""
     create_application = create_app if app_factory is None else app_factory
     bind_server = create_local_server if server_factory is None else server_factory
     make_thread = threading.Thread if thread_factory is None else thread_factory
     wait_ready = wait_until_ready if readiness_check is None else readiness_check
     launch_browser = open_edge if edge_opener is None else edge_opener
-    write_output = print if output is None else output
+    make_tray = create_tray_icon if tray_factory is None else tray_factory
+    show_message = show_windows_message if message_box is None else message_box
+    acquire_mutex = acquire_single_instance if mutex_acquirer is None else mutex_acquirer
+    release_mutex = release_single_instance if mutex_releaser is None else mutex_releaser
 
     try:
+        mutex = acquire_mutex()
+    except Exception:
+        show_message(
+            "XmlToPdf nu a putut verifica dacă rulează deja.",
+            "XmlToPdf",
+            MB_OK | MB_ICONERROR,
+        )
+        return 1
+
+    if mutex.already_running:
+        release_mutex(mutex)
+        show_message(
+            "XmlToPdf rulează deja. Folosește iconul existent din zona de notificări.",
+            "XmlToPdf",
+            MB_OK | MB_ICONINFORMATION,
+        )
+        return 0
+
+    server = None
+    controller: LauncherController | None = None
+    server_thread: threading.Thread | None = None
+    try:
         app = create_application()
+        app.logger.disabled = True
         server = bind_server(
             LOCAL_HOST,
             LOCAL_PORT,
             app,
             request_handler=QuietRequestHandler,
         )
-    except PortInUseError:
-        write_output(
-            "Portul local 5000 este deja ocupat. "
-            "Inchide aplicatia care il foloseste si incearca din nou."
-        )
-        return 1
-    except OSError as error:
-        if _port_is_occupied(error):
-            write_output(
-                "Portul local 5000 este deja ocupat. "
-                "Inchide aplicatia care il foloseste si incearca din nou."
-            )
-        else:
-            write_output("Serverul local XmlToPdf nu a putut porni.")
-        return 1
-    except Exception:
-        write_output("Serverul local XmlToPdf nu a putut porni.")
-        return 1
-
-    server_thread = None
-    thread_started = False
-    try:
         server_thread = make_thread(
             target=server.serve_forever,
             name="XmlToPdf-local-server",
             daemon=False,
         )
+        controller = LauncherController(server, server_thread)
         server_thread.start()
-        thread_started = True
 
         if not wait_ready(timeout=STARTUP_TIMEOUT_SECONDS):
-            write_output("Serverul local XmlToPdf nu a devenit disponibil.")
+            show_message(
+                "Serverul local XmlToPdf nu a devenit disponibil.",
+                "XmlToPdf",
+                MB_OK | MB_ICONERROR,
+            )
             return 1
 
-        try:
-            launch_browser(APP_URL)
-        except (EdgeUnavailableError, OSError):
-            write_output(
-                "Microsoft Edge nu a putut fi deschis. Serverul ruleaza; deschide manual "
-                f"{APP_URL} in Microsoft Edge."
-            )
+        tray_icon = make_tray(
+            lambda: controller.open_interface(
+                edge_opener=launch_browser,
+                message_box=show_message,
+            ),
+            controller.stop,
+        )
+        controller.icon = tray_icon
 
-        write_output(f"XmlToPdf ruleaza la {APP_URL}")
-        write_output("Pentru oprire, apasa Ctrl+C sau inchide aceasta fereastra.")
-        try:
-            server_thread.join()
-        except KeyboardInterrupt:
-            write_output("Se opreste serverul XmlToPdf.")
+        controller.open_interface(edge_opener=launch_browser, message_box=show_message)
+        tray_icon.run()
         return 0
-    except KeyboardInterrupt:
-        write_output("Se opreste serverul XmlToPdf.")
-        return 0
+    except PortInUseError:
+        show_message(
+            "Portul local 5000 este ocupat de altă aplicație. Închide aplicația care îl folosește și încearcă din nou.",
+            "XmlToPdf",
+            MB_OK | MB_ICONERROR,
+        )
+        return 1
+    except OSError as error:
+        if _port_is_occupied(error):
+            show_message(
+                "Portul local 5000 este ocupat de altă aplicație. Închide aplicația care îl folosește și încearcă din nou.",
+                "XmlToPdf",
+                MB_OK | MB_ICONERROR,
+            )
+        else:
+            show_message(
+                "Serverul local XmlToPdf nu a putut porni.",
+                "XmlToPdf",
+                MB_OK | MB_ICONERROR,
+            )
+        return 1
     except Exception:
-        write_output("Serverul local XmlToPdf s-a oprit din cauza unei erori.")
+        show_message(
+            "XmlToPdf s-a oprit din cauza unei erori. Repornește aplicația.",
+            "XmlToPdf",
+            MB_OK | MB_ICONERROR,
+        )
         return 1
     finally:
         try:
-            if thread_started and server_thread is not None:
-                server.shutdown()
-                server_thread.join()
+            if controller is not None:
+                controller.stop()
+            elif server is not None:
+                server.server_close()
+        except Exception:
+            show_message(
+                "XmlToPdf nu a putut încheia complet oprirea serverului.",
+                "XmlToPdf",
+                MB_OK | MB_ICONERROR,
+            )
         finally:
-            server.server_close()
+            release_mutex(mutex)
 
 
 def main() -> int:
-    """Console entry point used by the portable Windows distribution."""
-    return run_launcher()
+    """Entry point for the PyInstaller windowed executable."""
+    return run_windowed_launcher()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hmac
 import secrets
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -13,6 +14,11 @@ LOCAL_HOST = "127.0.0.1"
 LOCAL_PORT = 5000
 
 
+def _package_resources_dir() -> Path:
+    """Return package resources relative to the module in source or a frozen bundle."""
+    return Path(__file__).resolve().parent
+
+
 def create_app() -> Flask:
     """Construiește aplicația Flask."""
     from flask import Flask, jsonify, render_template, request, session
@@ -20,7 +26,12 @@ def create_app() -> Flask:
 
     from . import ubl
 
-    app = Flask(__name__)
+    package_dir = _package_resources_dir()
+    app = Flask(
+        __name__,
+        template_folder=str(package_dir / "templates"),
+        static_folder=str(package_dir / "static"),
+    )
     app.config.update(
         SECRET_KEY=secrets.token_bytes(32),
         MAX_CONTENT_LENGTH=ubl.MAX_XML_BYTES,
