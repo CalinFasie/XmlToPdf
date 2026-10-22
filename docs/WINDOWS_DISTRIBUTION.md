@@ -6,16 +6,50 @@ Distribuția este un singur `dist\XmlToPdf.exe`, construit cu PyInstaller `--one
 
 PyInstaller extrage componentele sale într-un director temporar la pornire, ceea ce poate prelungi pornirea față de `--onedir`. Directorul respectiv conține codul și resursele pachetului. Încărcarea XML este procesată în memorie de aplicație; XML-urile și alte documente ale utilizatorului nu sunt scrise în directorul de extragere. Nu folosi acel director pentru date persistente.
 
-## Construirea
+## Construirea și verificarea pachetului
 
-Folosește Windows și mediul virtual al repository-ului. Scriptul rezolvă căile față de propria locație și poate fi lansat din orice director:
+Construirea se face pe Windows, din sursele repository-ului. Python și dependențele de dezvoltare sunt necesare numai pe calculatorul care construiește aplicația; utilizatorul EXE-ului nu instalează Python separat. Scriptul rezolvă căile față de propria locație și poate fi lansat din orice director. Pentru un checkout nou, rulează din rădăcina repository-ului:
 
 ```powershell
+python --version
+python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 .\tools\build_windows.ps1
+$Executable = (Resolve-Path -LiteralPath .\dist\XmlToPdf.exe).Path
+Get-Item -LiteralPath $Executable | Select-Object FullName, Length
+Get-FileHash -LiteralPath $Executable -Algorithm SHA256
 ```
 
-Specificația `XmlToPdf.spec` activează onefile și fereastra fără consolă, include șabloanele/CSS-ul și dependențele tray, colectează bibliotecile dinamice lxml și exclude testele. Rezultatul este `dist\XmlToPdf.exe`. `build/` și `dist/` sunt artefacte locale și sunt ignorate de Git; nu comite executabilul.
+Versiunea aplicației este `0.1.0`, declarată în `pyproject.toml`. Scriptul `tools/build_windows.ps1` folosește specificația `XmlToPdf.spec`, construiește un singur EXE onefile fără consolă, include șabloanele/CSS-ul și dependențele runtime, colectează bibliotecile dinamice lxml și exclude `pytest` și `tests`. Rezultatul este `dist\XmlToPdf.exe`. `build/` și `dist/` sunt artefacte locale ignorate de Git; nu le adăuga la commit sau pachetul public.
+
+Înainte de distribuire, inspectează conținutul arhivei PyInstaller și confirmă că nu conține XML/PDF de factură, teste/fixture-uri sau secrete. Cu PyInstaller instalat în `.venv`, lista de membri se poate consulta astfel:
+
+```powershell
+& .\.venv\Scripts\pyi-archive_viewer.exe -l .\dist\XmlToPdf.exe
+```
+
+Compară lista cu așteptarea: runtime-ul aplicației și dependențele sunt incluse; `tests`, fixture-uri, mostre private, `.env`, chei și tokenuri nu trebuie să apară. Verifică și directorul `dist/`; pachetul livrat conține numai `XmlToPdf.exe`. Hash-ul SHA-256 se calculează după build și se publică împreună cu acel fișier pentru verificarea integrității. Hash-ul este specific fiecărui build. Repetarea procedurii este documentată, dar byte-for-byte reproducerea nu este garantată când resolverul instalează versiuni diferite ale dependențelor permise de `pyproject.toml`.
+
+Versiunile folosite la o verificare se pot nota cu:
+
+```powershell
+python --version
+.\.venv\Scripts\python.exe -m pip show PyInstaller
+```
+
+Nu crea aici un Release, tag Git sau pachet public fără aprobarea explicită a etapei respective.
+
+## Utilizare pentru utilizatorul final
+
+Aceste instrucțiuni se aplică EXE-ului Windows 0.1.0 după publicarea lui. Release-ul GitHub și pachetul public nu sunt create în etapa actuală.
+
+1. Descarcă `XmlToPdf.exe` din Release-ul oficial al repository-ului după publicarea v0.1.0.
+2. Copiază singurul fișier EXE într-un director ales și pornește-l prin dublu-click. Nu este necesar Python; este necesar Microsoft Edge.
+3. În fereastra Edge dedicată, selectează fișierul XML e-Factura (maximum 10 MiB) și pornește procesarea. XML-ul este procesat local, în memorie.
+4. Pentru a obține PDF-ul, apasă „Tipărește / Salvează PDF”, apoi alege „Save as PDF” sau o imprimantă din dialogul Edge. Confirmă A4 și Landscape în previzualizare.
+5. Închide XmlToPdf cu X-ul ferestrei Edge dedicate, butonul web „Închide aplicația” sau comanda „Închide XmlToPdf” din system tray. Serverul local și pictograma tray se opresc controlat.
+
+Închiderea unei file, refresh-ul, minimizarea sau Print Preview nu opresc aplicația. Documentele încărcate nu sunt salvate intenționat de XmlToPdf.
 
 ## Pornire și oprire
 
@@ -49,9 +83,9 @@ Testele automatizate folosesc XML-uri sintetice și simulează Edge, system tray
 - Arhiva executabilului conține runtime-ul Python, backendul Windows pystray și șabloanele/CSS-ul. Inspecția nu a găsit teste, fixture-uri, XML-uri sau PDF-uri în pachet.
 - Testele verifică încărcarea șabloanelor dintr-un director onefile simulat, legarea acțiunilor din meniu, mutexul și eliberarea portului.
 
-### Verificări manuale rămase
+### Verificări manuale în sesiunea Task 006B
 
-În această sesiune nu a fost controlabilă interfața nativă Microsoft Edge/system tray. Nu au fost executate dublu-click-ul pe o copie izolată a EXE-ului, verificarea vizuală a meniului, încărcarea prin Edge, Print / Save as PDF, oprirea efectivă din tray sau repornirea. Nu a fost disponibil un calculator fără Python instalat. Aceste verificări rămân necesare înaintea distribuției finale.
+La acel moment, interfața nativă Edge/system tray și un al doilea calculator nu au fost disponibile pentru verificarea manuală de către Codex. Validarea manuală ulterioară făcută de utilizator este consemnată la „Validarea manuală finală pentru v0.1.0” de mai jos.
 
 ### Task 006C — verificări executate
 
@@ -59,7 +93,7 @@ Testele automatizate folosesc XML-uri sintetice și simulează Edge, system tray
 - `git diff --check`: fără erori.
 - `tools/build_windows.ps1`: build onefile reușit cu Python 3.13.14 și PyInstaller 6.22.3; `dist\XmlToPdf.exe` are 24.035.244 octeți, iar `dist/` conține numai acest executabil.
 - Testul de integrare folosește un port loopback efemer și date sintetice: răspunsul HTTP de oprire a fost citit integral, controllerul a încheiat serverul și a apelat oprirea iconului, iar portul a putut fi legat din nou.
-- Nu a fost posibilă verificarea manuală a butonului în Microsoft Edge, copierea și pornirea EXE-ului prin dublu-click sau interacțiunea cu iconul system tray. Aceste verificări rămân necesare înaintea distribuirii buildului nou.
+- În sesiunea Task 006C, Codex nu a putut verifica manual butonul în Edge, pornirea prin dublu-click sau meniul tray. Utilizatorul a validat ulterior aceste fluxuri; vezi secțiunea de validare manuală finală.
 
 ### Task 006D — verificări executate
 
@@ -68,7 +102,7 @@ Testele automatizate folosesc XML-uri sintetice și simulează Edge, system tray
 - `tools/build_windows.ps1`: build PyInstaller onefile reușit cu Python 3.13.14 și PyInstaller 6.22.3; `dist\XmlToPdf.exe` are 24.048.894 octeți.
 - Probe locale ale API-urilor Win32 de enumerare a proceselor și ferestrelor: apelurile au reușit.
 - Probă automatizată cu EXE-ul real și Microsoft Edge în sesiunea Windows: pagina locală a răspuns `200`, a fost găsită fereastra Edge vizibilă asociată arborelui de procese XmlToPdf, trimiterea `WM_CLOSE` către acel HWND a dus la ieșirea launcherului cu codul `0`, portul 5000 a putut fi legat din nou și profilul nou creat nu a rămas pe disc. Proba nu a încărcat o factură și nu a verificat vizual interfața sau imprimarea.
-- Interfața UI Microsoft Edge și system tray nu a fost disponibilă pentru control manual în Codex. Rămân neverificate vizual: încărcarea unui XML sintetic în fereastra Edge, Print / Save as PDF, minimizarea/refresh-ul prin UI, meniul tray și faptul că alte ferestre Edge rămân deschise. Acestea necesită validare manuală înainte de distribuție.
+- În sesiunea Task 006D, interfața Edge și system tray nu a fost disponibilă pentru control manual în Codex; acea limitare a fost ulterior închisă prin validarea manuală a utilizatorului consemnată mai jos.
 
 ### Task 006E — închiderea ferestrei dedicate din tray și web
 
@@ -76,4 +110,27 @@ Testele automatizate folosesc XML-uri sintetice și simulează Edge, system tray
 - `git diff --check`: fără erori.
 - `tools/build_windows.ps1`: build PyInstaller onefile reușit cu Python 3.13.14 și PyInstaller 6.22.3; `dist/XmlToPdf.exe` are 24.052.668 octeți și rămâne exclus din Git.
 - Probă de integrare cu EXE-ul reconstruit: pagina locală a răspuns, POST-ul de oprire cu token CSRF a primit HTTP 202, HWND-ul Edge nou identificat în arborele EXE-ului a dispărut, procesul launcherului a ieșit cu codul 0, iar portul 5000 a putut fi legat din nou. Nu existau ferestre Edge obișnuite vizibile la începutul probei, deci această rulare nu a verificat manual păstrarea lor.
-- Testele automatizate simulează comanda tray și confirmă că închiderea HWND-ului precedă oprirea serverului. Interacțiunea manuală cu meniul nativ tray nu a fost disponibilă în această sesiune; nici fluxul Print / Save as PDF nu a fost repetat. Aceste verificări vizuale rămân pentru confirmare manuală pe Windows.
+- Testele automatizate simulează comanda tray și confirmă că închiderea HWND-ului precedă oprirea serverului. Interacțiunea manuală cu tray și Print / Save as PDF nu a fost disponibilă în sesiunea Codex Task 006E; utilizatorul a confirmat ulterior verificarea acestor fluxuri pe Windows, inclusiv pe un al doilea calculator.
+
+### Validarea manuală finală pentru v0.1.0
+
+Următoarele rezultate au fost confirmate manual de utilizator pe Windows, pe calculatorul de dezvoltare și pe un al doilea calculator:
+
+- `XmlToPdf.exe` pornește fără fereastră CMD și deschide fereastra Edge dedicată.
+- XML-ul poate fi încărcat și factura este afișată.
+- Print / Save as PDF funcționează în Edge cu layout A4 Landscape.
+- Toate cele trei metode de închidere au fost verificate: X-ul ferestrei Edge dedicate, butonul web și system tray. Serverul se oprește, portul 5000 se eliberează, iar pictograma tray dispare.
+- Celelalte ferestre Edge rămân neafectate.
+- Executabilul a fost copiat și validat și pe al doilea calculator.
+
+Aceasta este confirmarea manuală furnizată de utilizator; build-ul și testele automate de pregătire v0.1.0 se raportează separat în secțiunea de rezultate a acestei versiuni. O-06 rămâne deschisă pentru testarea extinsă a paginării facturilor lungi; confirmarea unei pagini pentru factura scurtă de referință nu închide această decizie.
+
+### Task 007 — rezultate build v0.1.0
+
+- Versiunea din `pyproject.toml`: `0.1.0`.
+- Build Windows reușit cu Python 3.13.14, PyInstaller 6.22.3 și Windows 11.
+- `dist\XmlToPdf.exe`: 24.052.950 octeți (aproximativ 22,94 MiB).
+- SHA-256 pentru acest build: `E4AD5CF06AFED0B80F5B8F9BB92897C64A15838DFF81B2F025480EEDC05CAE2E`.
+- Teste: `pytest` — 131 trecute; `git diff --check` fără erori.
+- Arhiva PyInstaller a fost inspectată recursiv (876 membri): nu au fost găsite căi de XML/PDF, teste, fixture-uri, mostre, fișiere de mediu sau chei. Specificația exclude explicit `pytest` și `tests`. Directorul `dist/` conține numai EXE-ul.
+- Build-ul și testele din acest task nu publică un Release, tag Git sau pachet public. EXE-ul și directoarele `build/`/`dist/` rămân artefacte locale ignorate de Git.
