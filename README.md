@@ -5,6 +5,8 @@
 Repository: https://github.com/CalinFasie/XmlToPdf<br>
 Director local vizat: `D:\Github\XmlToPdf`
 
+**Versiunea publică:** [XmlToPdf v0.1.0 — Windows](https://github.com/CalinFasie/XmlToPdf/releases/tag/v0.1.0)
+
 ## Scop
 
 XmlToPdf permite consultarea locală a facturilor românești **RO e-Factura UBL `Invoice`** într-un format clasic de factură, fără a depinde de disponibilitatea conversiei oferite de ANAF.
@@ -42,6 +44,7 @@ Flask local -> Parser UBL (lxml) -> Model factură -> Jinja2 + HTML/CSS local
 
 ## Documentație
 
+- [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) — stadiul curent, deciziile de bază, limitările și următoarea etapă recomandată.
 - [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) — cerințe și criterii de acceptare.
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) — decizii confirmate și întrebări deschise.
 - [`AGENTS.md`](AGENTS.md) — reguli permanente de lucru pentru Codex.
@@ -82,7 +85,7 @@ Serverul ascultă numai pe `127.0.0.1:5000`, cu modul debug și reloader dezacti
 
 ### Utilizare pentru utilizatorul final — EXE Windows 0.1.0
 
-Release-ul GitHub v0.1.0 și pachetul public nu au fost create în etapa de pregătire curentă. După publicare, descarcă numai `XmlToPdf.exe` din [pagina Releases](https://github.com/CalinFasie/XmlToPdf/releases). Pentru rulare nu instala Python și nu copia directoare `build/` sau `dist/`; Microsoft Edge trebuie să fie instalat.
+Release-ul [XmlToPdf v0.1.0 — Windows](https://github.com/CalinFasie/XmlToPdf/releases/tag/v0.1.0) este public. Descarcă numai `XmlToPdf.exe` din pagina Release. Pentru rulare nu instala Python și nu copia directoare `build/` sau `dist/`; Microsoft Edge trebuie să fie instalat.
 
 1. Copiază `XmlToPdf.exe` într-un director ales de tine.
 2. Pornește EXE-ul prin dublu-click. Se deschide o fereastră Microsoft Edge dedicată; aplicația web și serverul rulează local pe `127.0.0.1`.
