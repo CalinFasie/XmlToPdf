@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import hmac
 import secrets
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -19,12 +20,21 @@ def _package_resources_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
-def create_app() -> Flask:
+def create_app(
+    *,
+    enable_shutdown: bool = False,
+    shutdown_scheduler: Callable[[Any], bool] | None = None,
+) -> Flask:
     """Construiește aplicația Flask."""
     from flask import Flask, jsonify, render_template, request, session
     from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
     from . import ubl
+
+    if enable_shutdown and shutdown_scheduler is None:
+        raise ValueError("Launcher mode requires a shutdown scheduler.")
+    if not enable_shutdown and shutdown_scheduler is not None:
+        raise ValueError("A shutdown scheduler is only valid in launcher mode.")
 
     package_dir = _package_resources_dir()
     app = Flask(
@@ -67,22 +77,31 @@ def create_app() -> Flask:
     def handle_bad_request(_error):
         return jsonify(ok=False, message="Cererea nu a putut fi procesată."), 400
 
+    def has_valid_csrf_token() -> bool:
+        expected_token = session.get("csrf_token")
+        supplied_token = request.headers.get("X-CSRF-Token", "")
+        return isinstance(expected_token, str) and hmac.compare_digest(
+            expected_token, supplied_token
+        )
+
     @app.get("/")
     def home() -> str:
         csrf_token = session.get("csrf_token")
         if csrf_token is None:
             csrf_token = secrets.token_urlsafe(32)
             session["csrf_token"] = csrf_token
-        return render_template("index.html", csrf_token=csrf_token)
+        return render_template(
+            "index.html",
+            csrf_token=csrf_token,
+            shutdown_enabled=enable_shutdown,
+        )
 
     @app.post("/upload")
     def upload_xml():
         if request.mimetype not in {"application/xml", "text/xml", "application/octet-stream"}:
             return jsonify(ok=False, message="Trimite conținut XML pentru procesare."), 415
 
-        expected_token = session.get("csrf_token")
-        supplied_token = request.headers.get("X-CSRF-Token", "")
-        if not isinstance(expected_token, str) or not hmac.compare_digest(expected_token, supplied_token):
+        if not has_valid_csrf_token():
             return jsonify(ok=False, message="Cererea nu are un token CSRF valid."), 403
 
         content_length = request.content_length
@@ -130,5 +149,31 @@ def create_app() -> Flask:
             message="Factura a fost încărcată.",
             invoice_html=invoice_html,
         ), 200
+
+    if enable_shutdown:
+        assert shutdown_scheduler is not None
+
+        @app.post("/shutdown")
+        def shutdown_app():
+            if not has_valid_csrf_token():
+                return jsonify(ok=False, message="Cererea nu are un token CSRF valid."), 403
+
+            response = jsonify(
+                ok=True,
+                message="XmlToPdf a fost oprită. Poți închide această filă.",
+            )
+            try:
+                scheduled = shutdown_scheduler(response)
+            except Exception:
+                scheduled = False
+            if not scheduled:
+                return jsonify(
+                    ok=False,
+                    message=(
+                        "Comanda de oprire nu a putut fi pornită. "
+                        "Poți închide aplicația din system tray."
+                    ),
+                ), 503
+            return response, 202
 
     return app

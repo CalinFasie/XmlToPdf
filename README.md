@@ -1,6 +1,6 @@
 # XmlToPdf
 
-**Stadiu:** fundația Flask, parserul UBL cu modelul intern, încărcarea securizată în memorie, afișarea HTML compactă, fluxul de imprimare A4 landscape din browser și launcherul Windows PyInstaller `--onefile`, fără consolă și cu system tray, sunt implementate. Utilizatorul a confirmat manual un PDF de o pagină pentru factura de referință; regulile generale de paginare rămân deschise. Generarea PDF în backend nu este implementată.
+**Stadiu:** fundația Flask, parserul UBL cu modelul intern, încărcarea securizată în memorie, afișarea HTML compactă, fluxul de imprimare A4 landscape din browser și launcherul Windows PyInstaller `--onefile`, fără consolă și cu system tray, sunt implementate. Launcherul oferă oprirea controlată atât din pagină, cât și din meniul system tray. Utilizatorul a confirmat manual un PDF de o pagină pentru factura de referință; regulile generale de paginare rămân deschise. Generarea PDF în backend nu este implementată.
 
 Repository: https://github.com/CalinFasie/XmlToPdf<br>
 Director local vizat: `D:\Github\XmlToPdf`
@@ -88,7 +88,7 @@ Instalează PyInstaller, pystray și celelalte dependențe de build din rădăci
 .\tools\build_windows.ps1
 ```
 
-Build-ul produce un singur fișier `dist\XmlToPdf.exe`. Copiază numai EXE-ul în directorul dorit; nu este necesar un folder `_internal`. La dublu-click, aplicația pornește fără fereastră CMD, leagă serverul la `127.0.0.1:5000`, așteaptă răspunsul local și apoi deschide Microsoft Edge. Iconul din system tray permite redeschiderea interfeței și oprirea controlată. Închiderea ferestrei Edge nu oprește serverul.
+Build-ul produce un singur fișier `dist\XmlToPdf.exe`. Copiază numai EXE-ul în directorul dorit; nu este necesar un folder `_internal`. La dublu-click, aplicația pornește fără fereastră CMD, leagă serverul la `127.0.0.1:5000`, așteaptă răspunsul local și apoi deschide Microsoft Edge. Butonul „Închide aplicația” din pagină și comanda din system tray opresc același server controlat; închiderea ferestrei sau filei Edge nu oprește serverul. Modul de dezvoltare `python -m xmltopdf` nu are buton sau rută HTTP de oprire.
 
 Prima pornire poate dura mai mult decât varianta `--onedir`, deoarece PyInstaller extrage temporar bibliotecile incluse. Aplicația nu salvează XML-uri sau alte documente ale utilizatorului în directorul temporar; XML-ul încărcat este procesat în memorie. Calculatorul țintă trebuie să aibă Windows și Microsoft Edge instalat, dar nu Python, Flask sau lxml instalate separat. Pentru detalii și limitele verificării, vezi [`docs/WINDOWS_DISTRIBUTION.md`](docs/WINDOWS_DISTRIBUTION.md).
 

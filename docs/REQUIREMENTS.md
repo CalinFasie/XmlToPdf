@@ -37,7 +37,7 @@ Motivul proiectului este independența față de disponibilitatea conversiei ofe
 
 Alegerea bibliotecilor este o direcție tehnică pentru MVP, nu o justificare pentru adăugarea unor componente suplimentare.
 
-**D-13 confirmată:** launcherul Windows este un singur EXE PyInstaller `--onefile`, fără consolă, cu oprire din system tray; Microsoft Edge trebuie instalat pe calculatorul țintă, Python separat nu este necesar. Pornirea poate dura mai mult din cauza extragerii temporare a componentelor PyInstaller. XML-urile încărcate rămân în memorie și nu sunt salvate în directorul de extragere. Închiderea Edge lasă serverul activ până la comanda de oprire din tray. Detaliile de build și utilizare sunt în `docs/WINDOWS_DISTRIBUTION.md`.
+**D-13 confirmată:** launcherul Windows este un singur EXE PyInstaller `--onefile`, fără consolă, cu oprire controlată din interfața web locală sau din system tray; Microsoft Edge trebuie instalat pe calculatorul țintă, Python separat nu este necesar. Pornirea poate dura mai mult din cauza extragerii temporare a componentelor PyInstaller. XML-urile încărcate rămân în memorie și nu sunt salvate în directorul de extragere. Închiderea Edge nu oprește serverul. Modul de dezvoltare `python -m xmltopdf` nu oferă oprirea procesului prin HTTP. Detaliile de build și utilizare sunt în `docs/WINDOWS_DISTRIBUTION.md`.
 
 ## 3. Domeniul primei versiuni (MVP)
 
@@ -117,6 +117,8 @@ După procesare se afișează factura și comenzile:
 - „Alt XML”;
 - „Tipărește / Salvează PDF”, care apelează dialogul de imprimare al browserului.
 
+În executabilul Windows este disponibil și butonul „Închide aplicația”. Acesta cere confirmare și trimite o comandă locală `POST` protejată cu verificările Host, Origin și CSRF. Răspunsul de confirmare este trimis înainte ca serverul și procesul launcherului să se oprească. Comanda nu este disponibilă în modul de dezvoltare `python -m xmltopdf`; închiderea filei Edge nu oprește aplicația.
+
 Nu sunt necesare conturi, autentificare, istoric, administrare șabloane, dashboard sau previzualizator PDF separat.
 
 ## 6. Criterii de acceptare pentru MVP
@@ -143,6 +145,7 @@ Nu sunt necesare conturi, autentificare, istoric, administrare șabloane, dashbo
 | AC-18 | Câmpuri minime | Cazurile sintetice verifică acceptarea câmpurilor minime din FR-04 și mesaje clare pentru fiecare câmp obligatoriu absent, gol sau duplicat ambiguu. Câmpurile opționale absente nu sunt inventate. |
 | AC-19 | Cereri locale | Testele confirmă respingerea Host-ului nepermis, a Origin-ului cross-site și a POST-ului fără token CSRF valid; nicio rută nu este accesibilă de pe LAN. |
 | AC-20 | Distribuție portabilă Windows | `dist/XmlToPdf.exe` este singurul fișier necesar pentru rulare și poate fi copiat și pornit dintr-un director arbitrar, fără folder `_internal`, consolă sau instalare separată de Python. Executabilul onefile include runtime-ul Python, dependențele, șabloanele și CSS-ul; aplicația funcționează offline, cu Microsoft Edge instalat. Build-ul și pornirea se verifică pe Windows; funcționarea pe un calculator fără Python instalat se confirmă manual înaintea distribuției finale. Pornirea poate dura mai mult din cauza extragerii temporare PyInstaller, în care aplicația nu salvează documente ale utilizatorului. |
+| AC-21 | Oprire din interfața web a launcherului | Numai launcherul EXE afișează „Închide aplicația” și oferă ruta `POST /shutdown`. Cererea verifică Host, Origin și CSRF; GET nu declanșează oprirea. Răspunsul generic ajunge la browser înainte de oprirea controlată prin aceeași logică folosită de tray. Oprirea eliberează portul și elimină iconul. Modul `python -m xmltopdf` nu oferă ruta sau butonul. Refresh-ul, navigarea și închiderea filei nu opresc serverul. |
 
 Testele de paginare se vor executa în Microsoft Edge pe Windows. Setările concrete de imprimare utilizate în verificare vor fi documentate. Nu se solicită comparații de fidelitate PDF între Edge, Chrome sau alte browsere.
 

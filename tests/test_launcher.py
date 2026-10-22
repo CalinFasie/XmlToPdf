@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import errno
 import http.client
+import json
+import re
 import socket
 import sys
 import tempfile
@@ -244,6 +246,81 @@ def test_real_werkzeug_server_stops_and_releases_its_bound_socket() -> None:
     with socket.socket() as probe:
         probe.bind((LOCAL_HOST, port))
         assert not thread.is_alive()
+
+
+def test_web_shutdown_sends_response_then_stops_server_and_releases_port(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with socket.socket() as reservation:
+        reservation.bind((LOCAL_HOST, 0))
+        port = reservation.getsockname()[1]
+    monkeypatch.setattr(xmltopdf, "LOCAL_PORT", port)
+
+    controller_reference: dict[str, launcher.LauncherController] = {}
+
+    def schedule_shutdown(response: Any) -> bool:
+        return controller_reference["controller"].stop_after_response(response)
+
+    app = create_app(enable_shutdown=True, shutdown_scheduler=schedule_shutdown)
+    server = launcher.create_local_server(
+        LOCAL_HOST,
+        port,
+        app,
+        request_handler=launcher.QuietRequestHandler,
+    )
+    server_thread = threading.Thread(
+        target=server.serve_forever,
+        name="test-web-shutdown-server",
+        daemon=False,
+    )
+    tray_events: list[str] = []
+    icon = FakeIcon(tray_events, lambda: None, lambda: None)
+    controller = launcher.LauncherController(server, server_thread, icon=icon)
+    controller_reference["controller"] = controller
+    server_thread.start()
+
+    try:
+        connection = http.client.HTTPConnection(LOCAL_HOST, port, timeout=3)
+        connection.request("GET", "/", headers={"Connection": "close"})
+        home = connection.getresponse()
+        homepage = home.read()
+        cookie_header = home.getheader("Set-Cookie", "").split(";", 1)[0]
+        csrf_match = re.search(rb'data-csrf-token="([^"]+)"', homepage)
+        assert csrf_match is not None
+        csrf_token = csrf_match.group(1).decode("ascii")
+        connection.close()
+
+        shutdown_connection = http.client.HTTPConnection(LOCAL_HOST, port, timeout=3)
+        shutdown_connection.request(
+            "POST",
+            "/shutdown",
+            body=b"",
+            headers={
+                "Host": f"{LOCAL_HOST}:{port}",
+                "Origin": f"http://{LOCAL_HOST}:{port}",
+                "Cookie": cookie_header,
+                "X-CSRF-Token": csrf_token,
+                "Connection": "close",
+            },
+        )
+        response = shutdown_connection.getresponse()
+        response_body = response.read()
+        shutdown_connection.close()
+
+        assert response.status == 202
+        assert json.loads(response_body) == {
+            "ok": True,
+            "message": "XmlToPdf a fost oprită. Poți închide această filă.",
+        }
+        server_thread.join(timeout=3)
+        assert not server_thread.is_alive()
+        assert controller._stop_finished.wait(timeout=3)
+        assert tray_events == ["tray_stop"]
+        with socket.socket() as probe:
+            probe.bind((LOCAL_HOST, port))
+    finally:
+        if server_thread.is_alive():
+            controller.stop()
 
 
 def test_edge_failure_keeps_server_and_tray_available_and_offers_local_url() -> None:

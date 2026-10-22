@@ -17,14 +17,16 @@ Folosește Windows și mediul virtual al repository-ului. Scriptul rezolvă căi
 
 Specificația `XmlToPdf.spec` activează onefile și fereastra fără consolă, include șabloanele/CSS-ul și dependențele tray, colectează bibliotecile dinamice lxml și exclude testele. Rezultatul este `dist\XmlToPdf.exe`. `build/` și `dist/` sunt artefacte locale și sunt ignorate de Git; nu comite executabilul.
 
-## Pornire și control din system tray
+## Pornire și oprire
 
-La prima pornire, launcherul creează o singură instanță, construiește aplicația prin `create_app()`, leagă serverul Werkzeug exclusiv la `127.0.0.1:5000`, așteaptă un răspuns HTTP local și apoi încearcă să deschidă pagina în Microsoft Edge. Iconul din zona de notificări oferă:
+La prima pornire, launcherul creează o singură instanță, activează ruta de oprire numai pentru această rulare, leagă serverul Werkzeug exclusiv la `127.0.0.1:5000`, așteaptă un răspuns HTTP local și apoi încearcă să deschidă pagina în Microsoft Edge. Pagina oferă butonul „Închide aplicația”; acesta cere confirmare și trimite un `POST` local protejat de verificările Host, Origin și CSRF. Serverul transmite răspunsul de confirmare înainte de a intra pe aceeași cale de oprire folosită de system tray. Oprirea eliberează portul, așteaptă threadurile HTTP active și elimină iconul. Dacă programarea opririi nu reușește, interfața afișează o eroare și comanda din tray rămâne disponibilă.
+
+Iconul din zona de notificări oferă:
 
 - **Deschide XmlToPdf** — lansează Edge către pagina locală. Nu închide și nu controlează alte ferestre sau procese Edge.
-- **Închide XmlToPdf** — oprește controlat serverul, eliberează portul, așteaptă threadul serverului și elimină iconul.
+- **Închide XmlToPdf** — apelează aceeași logică de oprire controlată ca butonul din pagina web.
 
-Închiderea Edge nu oprește serverul; folosește comanda din tray. Dacă Edge nu este disponibil, aplicația rămâne activă, iar un mesaj afișează URL-ul local pentru deschidere manuală. O a doua lansare a XmlToPdf este detectată prin mutex și îndrumă utilizatorul către iconul existent. Dacă portul 5000 este ocupat de un proces necunoscut, aplicația afișează o eroare și nu lansează Edge.
+Închiderea Edge, închiderea filei, refresh-ul sau navigarea nu opresc serverul. Ruta HTTP de oprire nu este înregistrată de comanda de dezvoltare `python -m xmltopdf`, care se oprește cu `Ctrl+C`. Dacă Edge nu este disponibil, aplicația rămâne activă, iar un mesaj afișează URL-ul local pentru deschidere manuală. O a doua lansare a XmlToPdf este detectată prin mutex și îndrumă utilizatorul către iconul existent. Dacă portul 5000 este ocupat de un proces necunoscut, aplicația afișează o eroare și nu lansează Edge.
 
 Aplicația nu pornește automat odată cu Windows și nu instalează servicii sau înregistrări în registry. Comanda de dezvoltare `python -m xmltopdf` rămâne disponibilă și pornește serverul local pentru oprire cu `Ctrl+C`.
 
@@ -48,3 +50,11 @@ Testele automatizate folosesc XML-uri sintetice și simulează Edge, system tray
 ### Verificări manuale rămase
 
 În această sesiune nu a fost controlabilă interfața nativă Microsoft Edge/system tray. Nu au fost executate dublu-click-ul pe o copie izolată a EXE-ului, verificarea vizuală a meniului, încărcarea prin Edge, Print / Save as PDF, oprirea efectivă din tray sau repornirea. Nu a fost disponibil un calculator fără Python instalat. Aceste verificări rămân necesare înaintea distribuției finale.
+
+### Task 006C — verificări executate
+
+- `pytest`: 118 teste trecute. Testele HTTP loopback au fost rulate cu permisiunea necesară pentru conexiuni locale.
+- `git diff --check`: fără erori.
+- `tools/build_windows.ps1`: build onefile reușit cu Python 3.13.14 și PyInstaller 6.22.3; `dist\XmlToPdf.exe` are 24.035.244 octeți, iar `dist/` conține numai acest executabil.
+- Testul de integrare folosește un port loopback efemer și date sintetice: răspunsul HTTP de oprire a fost citit integral, controllerul a încheiat serverul și a apelat oprirea iconului, iar portul a putut fi legat din nou.
+- Nu a fost posibilă verificarea manuală a butonului în Microsoft Edge, copierea și pornirea EXE-ului prin dublu-click sau interacțiunea cu iconul system tray. Aceste verificări rămân necesare înaintea distribuirii buildului nou.

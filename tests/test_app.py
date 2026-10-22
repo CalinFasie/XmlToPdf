@@ -51,6 +51,18 @@ def post_xml(
     )
 
 
+def launcher_client(
+    shutdown_scheduler,
+) -> tuple[FlaskClient, str]:
+    app = create_app(enable_shutdown=True, shutdown_scheduler=shutdown_scheduler)
+    app.config["TESTING"] = True
+    client = app.test_client()
+    response = client.get("/", base_url=APP_BASE_URL)
+    match = CSRF_PATTERN.search(response.data)
+    assert match is not None
+    return client, match.group(1).decode("ascii")
+
+
 def test_homepage_offers_raw_xml_upload_and_no_store(local_client: tuple[FlaskClient, str]) -> None:
     client, _csrf_token = local_client
     response = client.get("/", base_url=APP_BASE_URL)
@@ -66,6 +78,93 @@ def test_homepage_offers_raw_xml_upload_and_no_store(local_client: tuple[FlaskCl
     assert b"invoiceContainer.innerHTML = result.invoice_html;" in response.data
     assert b"invoiceContainer.replaceChildren();" in response.data
     assert response.headers["Cache-Control"] == "no-store"
+    assert b'id="shutdown-button"' not in response.data
+    assert b"beforeunload" not in response.data
+    assert b"pagehide" not in response.data
+
+
+def test_shutdown_control_and_route_are_launcher_only(
+    local_client: tuple[FlaskClient, str],
+) -> None:
+    client, csrf_token = local_client
+    assert client.get("/", base_url=APP_BASE_URL).status_code == 200
+    assert client.post(
+        "/shutdown",
+        base_url=APP_BASE_URL,
+        headers={"Origin": APP_ORIGIN, "X-CSRF-Token": csrf_token},
+    ).status_code == 404
+
+    launcher_app_client, _token = launcher_client(lambda _response: True)
+    homepage = launcher_app_client.get("/", base_url=APP_BASE_URL)
+    assert b'id="shutdown-button"' in homepage.data
+    assert "Închide aplicația".encode() in homepage.data
+    assert launcher_app_client.get("/shutdown", base_url=APP_BASE_URL).status_code == 405
+
+
+def test_shutdown_post_is_csrf_protected_and_uses_host_and_origin_validation() -> None:
+    scheduled: list[object] = []
+    client, csrf_token = launcher_client(lambda response: scheduled.append(response) or True)
+
+    bad_host = client.post(
+        "/shutdown",
+        base_url=APP_BASE_URL,
+        headers={"Host": "attacker.example", "Origin": APP_ORIGIN, "X-CSRF-Token": csrf_token},
+    )
+    bad_origin = client.post(
+        "/shutdown",
+        base_url=APP_BASE_URL,
+        headers={"Origin": "http://attacker.example", "X-CSRF-Token": csrf_token},
+    )
+    missing_csrf = client.post(
+        "/shutdown", base_url=APP_BASE_URL, headers={"Origin": APP_ORIGIN}
+    )
+    invalid_csrf = client.post(
+        "/shutdown",
+        base_url=APP_BASE_URL,
+        headers={"Origin": APP_ORIGIN, "X-CSRF-Token": "invalid"},
+    )
+
+    assert bad_host.status_code == 400
+    assert bad_origin.status_code == 403
+    assert missing_csrf.status_code == invalid_csrf.status_code == 403
+    assert scheduled == []
+
+
+def test_shutdown_returns_generic_confirmation_only_when_scheduled() -> None:
+    client, csrf_token = launcher_client(lambda _response: True)
+    response = client.post(
+        "/shutdown",
+        base_url=APP_BASE_URL,
+        headers={"Origin": APP_ORIGIN, "X-CSRF-Token": csrf_token},
+    )
+
+    assert response.status_code == 202
+    assert response.get_json() == {
+        "ok": True,
+        "message": "XmlToPdf a fost oprită. Poți închide această filă.",
+    }
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+@pytest.mark.parametrize("fail_scheduler", [False, True])
+def test_shutdown_scheduling_failure_does_not_report_success(fail_scheduler: bool) -> None:
+    def schedule(_response):
+        if fail_scheduler:
+            raise RuntimeError("private scheduler detail")
+        return False
+
+    client, csrf_token = launcher_client(schedule)
+    response = client.post(
+        "/shutdown",
+        base_url=APP_BASE_URL,
+        headers={"Origin": APP_ORIGIN, "X-CSRF-Token": csrf_token},
+    )
+
+    assert response.status_code == 503
+    result = response.get_json()
+    assert result["ok"] is False
+    assert "system tray" in result["message"]
+    assert "private scheduler detail" not in response.get_data(as_text=True)
 
 
 def test_session_cookie_uses_http_only_and_strict_same_site() -> None:
@@ -99,6 +198,16 @@ def test_valid_synthetic_xml_is_passed_to_existing_parser_and_rendered(
     assert "SYN-INV-001" in result["invoice_html"]
     assert parsed_inputs == [SYNTHETIC_XML]
     assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_launcher_shutdown_button_is_not_in_invoice_or_print_markup() -> None:
+    client, csrf_token = launcher_client(lambda _response: True)
+    response = post_xml(client, csrf_token, SYNTHETIC_XML)
+
+    assert response.status_code == 200
+    invoice_html = response.get_json()["invoice_html"]
+    assert "shutdown-button" not in invoice_html
+    assert "Închide aplicația" not in invoice_html
 
 
 def test_malformed_xml_returns_safe_message_and_does_not_log_content(

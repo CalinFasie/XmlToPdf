@@ -89,7 +89,9 @@ class LauncherController:
         self.server_thread = server_thread
         self.icon = icon
         self._stop_lock = threading.Lock()
-        self._stopped = False
+        self._stop_finished = threading.Event()
+        self._stop_started = False
+        self._stop_error: BaseException | None = None
 
     def open_interface(
         self,
@@ -111,21 +113,53 @@ class LauncherController:
     def stop(self) -> None:
         """Stop the WSGI server, release its socket, join its thread, and hide the tray icon."""
         with self._stop_lock:
-            if self._stopped:
-                return
-            self._stopped = True
+            owns_stop = not self._stop_started
+            if owns_stop:
+                self._stop_started = True
+
+        if not owns_stop:
+            self._stop_finished.wait()
+            if self._stop_error is not None:
+                raise RuntimeError("XmlToPdf shutdown did not complete cleanly.") from self._stop_error
+            return
 
         try:
-            if self.server_thread.is_alive():
-                self.server.shutdown()
-        finally:
             try:
-                self.server.server_close()
-            finally:
                 if self.server_thread.is_alive():
-                    self.server_thread.join()
-                if self.icon is not None:
-                    self.icon.stop()
+                    self.server.shutdown()
+            finally:
+                try:
+                    self.server.server_close()
+                finally:
+                    if self.server_thread.is_alive():
+                        self.server_thread.join()
+                    if self.icon is not None:
+                        self.icon.stop()
+        except BaseException as error:
+            self._stop_error = error
+            raise
+        finally:
+            self._stop_finished.set()
+
+    def stop_after_response(self, response: Any) -> bool:
+        """Schedule the shared stop path after a WSGI response has been closed."""
+        response_closed = threading.Event()
+        response.call_on_close(response_closed.set)
+
+        def stop_when_response_is_closed() -> None:
+            response_closed.wait()
+            self.stop()
+
+        stop_thread = threading.Thread(
+            target=stop_when_response_is_closed,
+            name="XmlToPdf-web-shutdown",
+            daemon=False,
+        )
+        try:
+            stop_thread.start()
+        except Exception:
+            return False
+        return True
 
 
 def create_local_server(
@@ -324,8 +358,22 @@ def run_windowed_launcher(
     server = None
     controller: LauncherController | None = None
     server_thread: threading.Thread | None = None
+    controller_reference: dict[str, LauncherController] = {}
+
+    def schedule_web_shutdown(response: Any) -> bool:
+        active_controller = controller_reference.get("controller")
+        if active_controller is None:
+            return False
+        return active_controller.stop_after_response(response)
+
     try:
-        app = create_application()
+        if app_factory is None:
+            app = create_app(
+                enable_shutdown=True,
+                shutdown_scheduler=schedule_web_shutdown,
+            )
+        else:
+            app = create_application()
         app.logger.disabled = True
         server = bind_server(
             LOCAL_HOST,
@@ -339,6 +387,7 @@ def run_windowed_launcher(
             daemon=False,
         )
         controller = LauncherController(server, server_thread)
+        controller_reference["controller"] = controller
         server_thread.start()
 
         if not wait_ready(timeout=STARTUP_TIMEOUT_SECONDS):

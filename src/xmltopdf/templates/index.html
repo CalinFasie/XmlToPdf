@@ -11,6 +11,13 @@
       <div class="app-header-inner">
         <a class="brand" href="/" aria-label="XmlToPdf — pagina principală">XmlToPdf</a>
         <span>Vizualizator local de facturi UBL</span>
+        {% if shutdown_enabled %}
+          <div class="header-actions">
+            <button class="shutdown-button" id="shutdown-button" type="button" data-action="shutdown">
+              Închide aplicația
+            </button>
+          </div>
+        {% endif %}
       </div>
     </header>
     <main class="app-main">
@@ -35,6 +42,7 @@
       const form = document.getElementById("upload-form");
       const fileInput = document.getElementById("xml-file");
       const submitButton = form.querySelector("button[type='submit']");
+      const shutdownButton = document.getElementById("shutdown-button");
       const status = document.getElementById("upload-status");
       const invoiceContainer = document.getElementById("invoice-container");
 
@@ -47,6 +55,33 @@
           window.print();
         }
       });
+
+      if (shutdownButton) {
+        shutdownButton.addEventListener("click", async () => {
+          if (!window.confirm("Închizi XmlToPdf și serverul local?")) {
+            return;
+          }
+
+          shutdownButton.disabled = true;
+          status.textContent = "Se trimite comanda de oprire…";
+          try {
+            const response = await fetch("/shutdown", {
+              method: "POST",
+              headers: { "X-CSRF-Token": form.dataset.csrfToken }
+            });
+            const result = await response.json();
+            if (!response.ok || !result.ok) {
+              status.textContent = result.message || "Oprirea XmlToPdf nu a putut fi pornită.";
+              shutdownButton.disabled = false;
+              return;
+            }
+            status.textContent = result.message;
+          } catch (_error) {
+            status.textContent = "Oprirea nu a putut fi confirmată. Poți închide aplicația din system tray.";
+            shutdownButton.disabled = false;
+          }
+        });
+      }
 
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
