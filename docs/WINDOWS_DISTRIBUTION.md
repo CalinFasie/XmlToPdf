@@ -1,5 +1,8 @@
 # Distribuția Windows
 
+**Release public:** [XmlToPdf v0.1.0 — Windows](https://github.com/CalinFasie/XmlToPdf/releases/tag/v0.1.0)<br>
+**Stadiul proiectului:** [docs/PROJECT_STATUS.md](PROJECT_STATUS.md)
+
 ## Pachetul onefile
 
 Distribuția este un singur `dist\XmlToPdf.exe`, construit cu PyInstaller `--onefile` și `console=False`. Executabilul include runtime-ul Python, Flask/Werkzeug, lxml, Jinja2, Pillow, pystray, șabloanele HTML și CSS-ul local. Copiază numai EXE-ul în directorul ales. Nu este necesar Python separat; Microsoft Edge trebuie instalat.
@@ -37,13 +40,13 @@ python --version
 .\.venv\Scripts\python.exe -m pip show PyInstaller
 ```
 
-Nu crea aici un Release, tag Git sau pachet public fără aprobarea explicită a etapei respective.
+Release-ul v0.1.0 este public. Pentru o versiune viitoare, crearea tagului, a Release-ului și a pachetului public necesită aprobarea explicită a etapei respective.
 
 ## Utilizare pentru utilizatorul final
 
-Aceste instrucțiuni se aplică EXE-ului Windows 0.1.0 după publicarea lui. Release-ul GitHub și pachetul public nu sunt create în etapa actuală.
+Aceste instrucțiuni se aplică EXE-ului Windows 0.1.0 publicat în [Release-ul oficial](https://github.com/CalinFasie/XmlToPdf/releases/tag/v0.1.0).
 
-1. Descarcă `XmlToPdf.exe` din Release-ul oficial al repository-ului după publicarea v0.1.0.
+1. Descarcă `XmlToPdf.exe` din [Release-ul v0.1.0](https://github.com/CalinFasie/XmlToPdf/releases/tag/v0.1.0).
 2. Copiază singurul fișier EXE într-un director ales și pornește-l prin dublu-click. Nu este necesar Python; este necesar Microsoft Edge.
 3. În fereastra Edge dedicată, selectează fișierul XML e-Factura (maximum 10 MiB) și pornește procesarea. XML-ul este procesat local, în memorie.
 4. Pentru a obține PDF-ul, apasă „Tipărește / Salvează PDF”, apoi alege „Save as PDF” sau o imprimantă din dialogul Edge. Confirmă A4 și Landscape în previzualizare.
@@ -133,4 +136,4 @@ Aceasta este confirmarea manuală furnizată de utilizator; build-ul și testele
 - SHA-256 pentru acest build: `E4AD5CF06AFED0B80F5B8F9BB92897C64A15838DFF81B2F025480EEDC05CAE2E`.
 - Teste: `pytest` — 131 trecute; `git diff --check` fără erori.
 - Arhiva PyInstaller a fost inspectată recursiv (876 membri): nu au fost găsite căi de XML/PDF, teste, fixture-uri, mostre, fișiere de mediu sau chei. Specificația exclude explicit `pytest` și `tests`. Directorul `dist/` conține numai EXE-ul.
-- Build-ul și testele din acest task nu publică un Release, tag Git sau pachet public. EXE-ul și directoarele `build/`/`dist/` rămân artefacte locale ignorate de Git.
+- Task 007 nu a publicat atunci un Release, tag Git sau pachet public; v0.1.0 a fost publicat ulterior în Task 008. EXE-ul și directoarele `build/`/`dist/` rămân artefacte locale ignorate de Git.

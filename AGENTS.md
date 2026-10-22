@@ -6,6 +6,7 @@ XmlToPdf este o aplicație **web locală pe Windows**, scrisă în Python, care 
 
 Înainte de o schimbare substanțială, citește secțiunile relevante din:
 
+- `docs/PROJECT_STATUS.md` — versiunea publicată, ce este implementat, verificările, limitările și următoarea etapă recomandată. Consultă-l la începutul fiecărui task.
 - `docs/REQUIREMENTS.md` — cerințe și criterii de acceptare;
 - `docs/DECISIONS.md` — decizii confirmate și întrebări deschise;
 - `README.md` — stadiul proiectului și modul de lucru.
@@ -28,6 +29,7 @@ Nu trata presupunerile din conversație ca decizii aprobate. Dacă există contr
 5. Adaugă sau adaptează teste pentru comportamentul modificat.
 6. Rulează verificările disponibile și declară exact ce a fost și ce nu a fost executat.
 7. La final, rezumă fișierele schimbate, testele, rezultatele și limitările.
+8. După un milestone important, actualizează `docs/PROJECT_STATUS.md` cu stadiul, verificările relevante și problemele rămase deschise.
 
 ## Reguli funcționale care nu se negociază implicit
 
