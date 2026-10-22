@@ -1,6 +1,6 @@
 # XmlToPdf — Cerințe pentru prima versiune
 
-> **Statut:** Draft consolidat; fundația Flask, parserul UBL, modelul intern, încărcarea XML securizată, afișarea HTML și fluxul de imprimare din browser sunt implementate<br>
+> **Statut:** Draft consolidat; fundația Flask, parserul UBL, modelul intern, încărcarea XML securizată, afișarea HTML, fluxul de imprimare din browser și launcherul Windows onefile cu system tray sunt implementate<br>
 > **Versiune document:** 0.3<br>
 > **Data:** 2026-10-20<br>
 > **Cale propusă în repository:** `docs/REQUIREMENTS.md`<br>
@@ -37,7 +37,7 @@ Motivul proiectului este independența față de disponibilitatea conversiei ofe
 
 Alegerea bibliotecilor este o direcție tehnică pentru MVP, nu o justificare pentru adăugarea unor componente suplimentare.
 
-**Direcție planificată, nu decizie de arhitectură pentru primul prototip:** D-13 — launcherul Windows va porni serverul local și va deschide browserul; tehnologia de împachetare și distribuire rămâne deschisă și se decide după prototip.
+**D-13 confirmată:** launcherul Windows este un singur EXE PyInstaller `--onefile`, fără consolă, cu oprire controlată din interfața web locală, system tray sau prin închiderea ferestrei Edge dedicate lansate cu `--app`. Fereastra folosește un director de profil temporar unic, separat de profilul obișnuit Edge; închiderea filei, refresh-ul, minimizarea și dialogul Print nu declanșează oprirea. Microsoft Edge trebuie instalat pe calculatorul țintă, Python separat nu este necesar. Pornirea poate dura mai mult din cauza extragerii temporare a componentelor PyInstaller. XML-urile încărcate rămân în memorie și nu sunt salvate intenționat în profilul Edge sau directorul de extragere. Edge poate crea acolo cache, cookie-uri, stare de sesiune, preferințe și fișiere de diagnostic. Launcherul șterge numai profilurile marcate ca fiind create de el și numai după ce procesele Edge nu le mai folosesc; dacă Edge rămâne activ după oprirea din pagină/tray, profilul poate rămâne temporar și este curățat la următoarea pornire când nu mai rulează procese Edge. Modul de dezvoltare `python -m xmltopdf` nu oferă oprirea procesului prin HTTP și nu lansează Edge dedicat. Detaliile sunt în `docs/WINDOWS_DISTRIBUTION.md`.
 
 ## 3. Domeniul primei versiuni (MVP)
 
@@ -117,6 +117,8 @@ După procesare se afișează factura și comenzile:
 - „Alt XML”;
 - „Tipărește / Salvează PDF”, care apelează dialogul de imprimare al browserului.
 
+În executabilul Windows este disponibil butonul „Închide aplicația”. Acesta cere confirmare și trimite o comandă locală `POST` protejată cu verificările Host, Origin și CSRF. După transmiterea răspunsului de confirmare, launcherul cere închiderea numai a ferestrei Edge dedicate, identificată prin HWND și PID-ul urmărit, apoi oprește serverul și launcherul. Comanda din system tray folosește aceeași ordine. La pornirea EXE-ului se deschide o fereastră Edge `--app` cu profil temporar separat; închiderea acelei ferestre cu X oprește controlat serverul și launcherul. Dacă fereastra nu poate fi închisă, aplicația rămâne activă și afișează o eroare. Minimizarea, refresh-ul și dialogul Print nu opresc aplicația. Nicio comandă HTTP de oprire nu este disponibilă în modul de dezvoltare `python -m xmltopdf`.
+
 Nu sunt necesare conturi, autentificare, istoric, administrare șabloane, dashboard sau previzualizator PDF separat.
 
 ## 6. Criterii de acceptare pentru MVP
@@ -138,10 +140,12 @@ Nu sunt necesare conturi, autentificare, istoric, administrare șabloane, dashbo
 | AC-13 | Imprimare în browserul țintă | În Microsoft Edge pe Windows, controalele web nu apar în documentul imprimat; conținutul este lizibil pe A4 landscape, fără omisiuni sau suprapuneri. Setările de imprimare ale testului sunt documentate. |
 | AC-14 | Securitate XML/HTML | XML-ul cu `DOCTYPE`, entități externe, XInclude sau structură malformată este respins fără acces la fișiere/rețea; textul XML care conține markup este afișat ca text, nu executat de browser. |
 | AC-15 | Valori financiare neconcordante (eșantion sintetic) | Se afișează exact valorile declarate; nu apare avertisment de reconciliere; utilizatorul poate imprima ori salva prin browser. |
-| AC-16 | Pornire prin launcher (la etapa de distribuție) | O acțiune Windows pornește serverul local și deschide browserul, fără pași manuali de terminal. |
+| AC-16 | Pornire și oprire prin launcher | `XmlToPdf.exe` pornește fără consolă un singur server pe `127.0.0.1:5000`, așteaptă răspunsul local și apoi lansează Edge cu `--app=http://127.0.0.1:5000/` și un director temporar unic prin `--user-data-dir`; profilul Edge obișnuit nu este folosit. O a doua instanță nu pornește alt server și indică folosirea iconului deja activ; un proces necunoscut care ocupă portul este raportat separat și nu este deschis în Edge. Dacă Edge sau monitorizarea ferestrei eșuează, serverul rămâne controlabil din tray și se afișează o eroare. Tray-ul activează fereastra dedicată existentă sau raportează absența ei. Comanda explicită din tray sau interfața web trimite `WM_CLOSE` numai către HWND-ul dedicat validat și așteaptă dispariția lui înainte de oprirea serverului, a tray-ului și a launcherului; dacă închiderea eșuează, serverul rămâne activ și eroarea este raportată. Închiderea ferestrei dedicate cu X oprește prin aceeași metodă comună serverul, tray-ul și launcherul; portul este eliberat. Minimizarea, refresh-ul și dialogul Print nu declanșează oprirea. Închiderea altor ferestre/sesiuni Edge nu afectează XmlToPdf. |
 | AC-17 | Limită încărcare | Cererile de până la 10 MiB sunt procesate numai dacă îndeplinesc celelalte criterii; cererile care depășesc 10 MiB sunt respinse înainte de parsare, inclusiv când antetul `Content-Length` lipsește sau este fals. |
 | AC-18 | Câmpuri minime | Cazurile sintetice verifică acceptarea câmpurilor minime din FR-04 și mesaje clare pentru fiecare câmp obligatoriu absent, gol sau duplicat ambiguu. Câmpurile opționale absente nu sunt inventate. |
 | AC-19 | Cereri locale | Testele confirmă respingerea Host-ului nepermis, a Origin-ului cross-site și a POST-ului fără token CSRF valid; nicio rută nu este accesibilă de pe LAN. |
+| AC-20 | Distribuție portabilă Windows | `dist/XmlToPdf.exe` este singurul fișier necesar pentru rulare și poate fi copiat și pornit dintr-un director arbitrar, fără folder `_internal`, consolă sau instalare separată de Python. Executabilul onefile include runtime-ul Python, dependențele, șabloanele și CSS-ul; aplicația funcționează offline, cu Microsoft Edge instalat. Build-ul și pornirea se verifică pe Windows; funcționarea pe un calculator fără Python instalat se confirmă manual înaintea distribuției finale. Pornirea poate dura mai mult din cauza extragerii temporare PyInstaller, în care aplicația nu salvează documente ale utilizatorului. |
+| AC-21 | Oprire din interfața web a launcherului | Numai launcherul EXE afișează „Închide aplicația” și oferă ruta `POST /shutdown`. Cererea verifică Host, Origin și CSRF; GET nu declanșează oprirea. Răspunsul generic este transmis înainte de închiderea solicitată a ferestrei Edge dedicate. Apoi aceeași oprire comună folosită de tray eliberează portul și elimină iconul; eșecul închiderii HWND este raportat, iar serverul rămâne activ. Modul `python -m xmltopdf` nu oferă ruta sau butonul. Refresh-ul și navigarea nu opresc serverul; închiderea ferestrei Edge dedicate este o comandă explicită de oprire, iar închiderea unei alte file sau ferestre Edge nu afectează aplicația. |
 
 Testele de paginare se vor executa în Microsoft Edge pe Windows. Setările concrete de imprimare utilizate în verificare vor fi documentate. Nu se solicită comparații de fidelitate PDF între Edge, Chrome sau alte browsere.
 
@@ -170,11 +174,10 @@ Exemplele pot conține date reale și **nu trebuie comise** în repository-ul pu
 
 | ID | Decizie de finalizat | Direcție curentă |
 |---|---|---|
-| O-01 | Forma launcherului și metoda de distribuire Windows | Pornire cu un singur gest, server local și deschidere automată în browser; alegem implementarea după prototip. |
 | O-05 | Ce câmpuri secundare apar în layoutul de bază | Se finalizează după maparea UBL–HTML; fără valori inventate. |
 | O-06 | Regulile exacte pentru paginare și numerotare | Se validează în Microsoft Edge, fără cerințe de identitate vizuală între browsere. |
 
-**Decizii închise în această revizie:** plafonul de încărcare este 10 MiB (fosta O-03); condițiile minime de acceptare sunt cele din FR-04 (fosta O-07); nu se emit avertismente de reconciliere financiară și nu se blochează imprimarea din acest motiv (fosta O-04); nu este necesară compatibilitatea PDF între browsere (fosta O-02). Rămân deschise O-01, O-05 și O-06.
+**Decizii închise:** O-01 este rezolvată prin D-13; plafonul de încărcare este 10 MiB (fosta O-03); condițiile minime de acceptare sunt cele din FR-04 (fosta O-07); nu se emit avertismente de reconciliere financiară și nu se blochează imprimarea din acest motiv (fosta O-04); nu este necesară compatibilitatea PDF între browsere (fosta O-02). Rămân deschise O-05 și O-06.
 
 ## 10. Definiția de finalizare a MVP-ului
 

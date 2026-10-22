@@ -6,6 +6,10 @@ __pycache__/
 *.pyc
 *.egg-info/
 
+# Artefacte generate de PyInstaller
+/build/
+/dist/
+
 # Fișiere cu informații secrete
 .env
 

@@ -1,6 +1,6 @@
 # XmlToPdf
 
-**Stadiu:** fundația Flask, parserul UBL cu modelul intern, încărcarea securizată în memorie, afișarea HTML compactă și fluxul de imprimare A4 landscape din browser sunt implementate. Utilizatorul a confirmat manual un PDF de o pagină pentru factura de referință; regulile generale de paginare rămân deschise. Generarea PDF în backend și launcherul nu sunt implementate.
+**Stadiu:** fundația Flask, parserul UBL cu modelul intern, încărcarea securizată în memorie, afișarea HTML compactă, fluxul de imprimare A4 landscape din browser și launcherul Windows PyInstaller `--onefile`, fără consolă și cu system tray, sunt implementate. Launcherul oferă oprire comună din pagină și tray: închide mai întâi fereastra Edge dedicată și apoi oprește serverul. Închiderea ferestrei dedicate cu X oprește aceeași instanță. Utilizatorul a confirmat manual un PDF de o pagină pentru factura de referință; regulile generale de paginare rămân deschise. Generarea PDF în backend nu este implementată.
 
 Repository: https://github.com/CalinFasie/XmlToPdf<br>
 Director local vizat: `D:\Github\XmlToPdf`
@@ -20,7 +20,7 @@ Utilizatorul va deschide un XML, va vizualiza factura ca pagină HTML în browse
 - Imprimare **A4 landscape** cu paginare automată și antetul tabelului repetat, unde este posibil.
 - **Print / Save as PDF** exclusiv la cererea utilizatorului, din browser.
 - Fără motor PDF în backend, bază de date, istoric al facturilor sau hosting public în MVP.
-- După instalare, procesarea nu are nevoie de internet sau de serviciile ANAF.
+- După instalare, procesarea nu are nevoie de internet sau de serviciile ANAF. Distribuția portabilă include runtime-ul Python; Microsoft Edge trebuie instalat separat.
 - Se acceptă doar XML bine format cu rădăcina UBL `Invoice` și câmpurile minime descrise în `docs/REQUIREMENTS.md`; nu se pretinde validare fiscală/XSD completă.
 - Corpul cererii de încărcare este limitat la **10 MiB**. XML-ul nu se persistă intenționat pe disc și valorile facturii nu se scriu în loguri.
 - Sumele sunt afișate cu textul zecimal din XML, fără localizare, separatori de mii, rotunjire sau recalculare. Diferențele aritmetice nu produc avertizări și nu blochează afișarea ori imprimarea.
@@ -79,7 +79,18 @@ python -m venv .venv
 
 Serverul ascultă numai pe `127.0.0.1:5000`, cu modul debug și reloader dezactivate. Deschide manual `http://127.0.0.1:5000/` în browser. Oprește serverul cu `Ctrl+C` în terminal.
 
-La distribuire, este planificat un **launcher Windows** care pornește serverul local și deschide automat browserul. Tehnologia de împachetare nu este încă decisă.
+### Build și utilizare Windows fără Python separat
+
+Instalează PyInstaller, pystray și celelalte dependențe de build din rădăcina repository-ului. Apoi poți apela scriptul de build din orice director; el rezolvă căile relativ la fișierul propriu:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\tools\build_windows.ps1
+```
+
+Build-ul produce un singur fișier `dist\XmlToPdf.exe`. Copiază numai EXE-ul în directorul dorit; nu este necesar un folder `_internal`. La dublu-click, aplicația pornește fără fereastră CMD, leagă serverul la `127.0.0.1:5000`, așteaptă răspunsul local și apoi deschide Microsoft Edge într-o fereastră `--app` cu un profil temporar separat. Închiderea acelei ferestre cu X oprește launcherul; butonul „Închide aplicația” și comanda din system tray închid aceeași fereastră dedicată înainte de oprirea serverului. Minimizarea, refresh-ul, dialogul Print și închiderea altor ferestre Edge nu opresc XmlToPdf. Modul de dezvoltare `python -m xmltopdf` nu are buton sau rută HTTP de oprire și nu lansează Edge în profilul temporar dedicat.
+
+Prima pornire poate dura mai mult decât varianta `--onedir`, deoarece PyInstaller extrage temporar bibliotecile incluse. Edge poate crea în profilul temporar cache, cookie-uri, stare de sesiune, preferințe și fișiere de diagnostic; aplicația nu salvează intenționat XML-uri ori PDF-uri acolo, iar XML-ul încărcat este procesat în memorie. Launcherul șterge numai directoarele proprii marcate după terminarea proceselor Edge care le folosesc. Oprirea din pagină sau tray închide mai întâi fereastra dedicată; dacă Edge încă folosește profilul, acesta rămâne până când procesele asociate se termină și este curățat la o pornire ulterioară XmlToPdf. Calculatorul țintă trebuie să aibă Windows și Microsoft Edge instalat, dar nu Python, Flask sau lxml instalate separat. Pentru detalii și limitele verificării, vezi [`docs/WINDOWS_DISTRIBUTION.md`](docs/WINDOWS_DISTRIBUTION.md).
 
 ## Date de referință și confidențialitate
 
