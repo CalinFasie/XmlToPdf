@@ -242,10 +242,33 @@ def test_real_werkzeug_server_stops_and_releases_its_bound_socket() -> None:
         pytest.fail("Werkzeug server did not become ready.")
 
     controller.stop()
+    controller.stop()
 
     with socket.socket() as probe:
         probe.bind((LOCAL_HOST, port))
         assert not thread.is_alive()
+
+
+def test_launcher_controller_stop_is_idempotent() -> None:
+    events: list[str] = []
+    server = FakeServer(events)
+    thread = FakeThread(
+        target=lambda: None,
+        name="test-server",
+        daemon=False,
+        events=events,
+    )
+    thread.start()
+    icon = SimpleNamespace(stop=lambda: events.append("tray_stop"))
+    controller = launcher.LauncherController(server, thread, icon=icon)
+
+    controller.stop()
+    controller.stop()
+
+    assert events.count("shutdown") == 1
+    assert events.count("server_close") == 1
+    assert events.count("thread_join") == 1
+    assert events.count("tray_stop") == 1
 
 
 def test_web_shutdown_sends_response_then_stops_server_and_releases_port(
@@ -431,34 +454,74 @@ def test_tray_menu_wires_open_and_controlled_exit_actions(monkeypatch: pytest.Mo
     assert actions == ["open", "exit"]
 
 
-def test_open_edge_uses_explicit_executable_without_shell(project_temp_dir: Path) -> None:
+def test_find_edge_executable_uses_standard_installation_paths(project_temp_dir: Path) -> None:
     edge = project_temp_dir / "Microsoft" / "Edge" / "Application" / "msedge.exe"
     edge.parent.mkdir(parents=True)
     edge.touch()
-    calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+    assert launcher.find_edge_executable(
+        {"ProgramFiles": str(project_temp_dir)}
+    ) == edge
 
-    launcher.open_edge(
-        environ={"ProgramFiles": str(project_temp_dir)},
-        popen=lambda *args, **kwargs: calls.append((args, kwargs)),
+
+def test_default_launcher_uses_one_edge_session_for_startup_and_tray_open(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    messages: list[tuple[str, str, int]] = []
+    server = FakeServer(events)
+    edge_path = Path("C:/Program Files/Microsoft/Edge/Application/msedge.exe")
+    monkeypatch.setattr(launcher, "find_edge_executable", lambda: edge_path)
+
+    class FakeSession:
+        def __init__(self, **kwargs: Any) -> None:
+            self.kwargs = kwargs
+            self.urls: list[str] = []
+
+        def open_or_activate(self, url: str) -> None:
+            self.urls.append(url)
+            events.append("edge_session_open")
+
+        def cleanup(self) -> None:
+            events.append("edge_session_cleanup")
+
+    sessions: list[FakeSession] = []
+
+    def session_factory(**kwargs: Any) -> FakeSession:
+        session = FakeSession(**kwargs)
+        sessions.append(session)
+        return session
+
+    class AutoCloseIcon(FakeIcon):
+        def run(self) -> None:
+            events.append("tray_run")
+            self.open_action()
+            sessions[0].kwargs["on_window_closed"]()
+            self.exit_action()
+
+    def tray_factory(open_action: Any, exit_action: Any) -> AutoCloseIcon:
+        return AutoCloseIcon(events, open_action, exit_action)
+
+    result = launcher.run_windowed_launcher(
+        server_factory=lambda *_a, **_k: server,
+        thread_factory=lambda **kwargs: FakeThread(**kwargs, events=events),
+        readiness_check=lambda **_kwargs: True,
+        edge_session_factory=session_factory,
+        tray_factory=tray_factory,
+        message_box=lambda *args: messages.append(args),
+        mutex_acquirer=_owned_mutex,
+        mutex_releaser=lambda _mutex: None,
     )
 
-    assert calls == [(([str(edge), launcher.APP_URL],), {"close_fds": True})]
-
-
-def test_open_edge_reports_missing_or_failed_executable_safely(project_temp_dir: Path) -> None:
-    with pytest.raises(launcher.EdgeUnavailableError):
-        launcher.open_edge(environ={}, popen=lambda *_a, **_k: None)
-
-    edge = project_temp_dir / "Microsoft" / "Edge" / "Application" / "msedge.exe"
-    edge.parent.mkdir(parents=True)
-    edge.touch()
-
-    with pytest.raises(launcher.EdgeUnavailableError) as error:
-        launcher.open_edge(
-            environ={"ProgramFiles": str(project_temp_dir)},
-            popen=lambda *_a, **_k: (_ for _ in ()).throw(OSError("private OS detail")),
-        )
-    assert "private OS detail" not in str(error.value)
+    assert result == 0
+    assert len(sessions) == 1
+    assert sessions[0].urls == [launcher.APP_URL, launcher.APP_URL]
+    assert callable(sessions[0].kwargs["on_window_closed"])
+    assert callable(sessions[0].kwargs["on_monitor_failure"])
+    assert events.index("edge_session_open") < events.index("tray_run")
+    assert events.index("tray_stop") < events.index("edge_session_cleanup")
+    assert events.count("shutdown") == 1
+    assert events.count("server_close") == 1
+    assert messages == []
 
 
 def test_templates_and_static_resources_work_outside_repository_directory(

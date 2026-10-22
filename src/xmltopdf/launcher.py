@@ -7,7 +7,6 @@ import errno
 import http.client
 import os
 import socket
-import subprocess
 import threading
 import time
 from collections.abc import Callable, Mapping
@@ -18,6 +17,7 @@ from typing import Any
 from werkzeug.serving import ThreadedWSGIServer, WSGIRequestHandler
 
 from . import LOCAL_HOST, LOCAL_PORT, create_app
+from .edge_session import EdgeAppSession, EdgeSessionError
 
 APP_URL = f"http://{LOCAL_HOST}:{LOCAL_PORT}/"
 STARTUP_TIMEOUT_SECONDS = 10.0
@@ -30,8 +30,7 @@ MB_ICONWARNING = 0x00000030
 MB_ICONINFORMATION = 0x00000040
 
 
-class EdgeUnavailableError(RuntimeError):
-    """Raised when Microsoft Edge cannot be found or launched."""
+EdgeUnavailableError = EdgeSessionError
 
 
 class PortInUseError(RuntimeError):
@@ -102,10 +101,11 @@ class LauncherController:
         """Open the local page in Edge without touching any other Edge process."""
         try:
             edge_opener(APP_URL)
-        except (EdgeUnavailableError, OSError):
+        except (EdgeSessionError, OSError):
             message_box(
-                "Microsoft Edge nu a putut fi deschis. Serverul XmlToPdf rulează; "
-                f"deschide manual {APP_URL} în Microsoft Edge.",
+                "Fereastra Microsoft Edge dedicată nu a putut fi pornită sau urmărită. "
+                "Serverul XmlToPdf rămâne activ; folosește system tray pentru a-l opri "
+                f"sau deschide manual {APP_URL}.",
                 "XmlToPdf",
                 MB_OK | MB_ICONWARNING,
             )
@@ -192,24 +192,6 @@ def find_edge_executable(
         )
 
     return next((candidate for candidate in candidates if candidate.is_file()), None)
-
-
-def open_edge(
-    url: str = APP_URL,
-    *,
-    environ: Mapping[str, str] | None = None,
-    popen: Callable[..., Any] | None = None,
-) -> None:
-    """Start Edge directly, without shell expansion or default-browser changes."""
-    executable = find_edge_executable(environ=environ)
-    if executable is None:
-        raise EdgeUnavailableError("Microsoft Edge was not found.")
-
-    start_process = subprocess.Popen if popen is None else popen
-    try:
-        start_process([str(executable), url], close_fds=True)
-    except OSError as error:
-        raise EdgeUnavailableError("Microsoft Edge could not be started.") from error
 
 
 def wait_until_ready(
@@ -320,6 +302,7 @@ def run_windowed_launcher(
     thread_factory: Callable[..., Any] | None = None,
     readiness_check: Callable[..., bool] | None = None,
     edge_opener: Callable[[str], None] | None = None,
+    edge_session_factory: Callable[..., Any] | None = None,
     tray_factory: Callable[[Callable[[], None], Callable[[], None]], Any] | None = None,
     message_box: Callable[[str, str, int], None] | None = None,
     mutex_acquirer: Callable[[], SingleInstanceHandle] | None = None,
@@ -330,7 +313,7 @@ def run_windowed_launcher(
     bind_server = create_local_server if server_factory is None else server_factory
     make_thread = threading.Thread if thread_factory is None else thread_factory
     wait_ready = wait_until_ready if readiness_check is None else readiness_check
-    launch_browser = open_edge if edge_opener is None else edge_opener
+    make_edge_session = EdgeAppSession if edge_session_factory is None else edge_session_factory
     make_tray = create_tray_icon if tray_factory is None else tray_factory
     show_message = show_windows_message if message_box is None else message_box
     acquire_mutex = acquire_single_instance if mutex_acquirer is None else mutex_acquirer
@@ -358,7 +341,34 @@ def run_windowed_launcher(
     server = None
     controller: LauncherController | None = None
     server_thread: threading.Thread | None = None
+    edge_session: Any | None = None
     controller_reference: dict[str, LauncherController] = {}
+
+    def report_edge_monitor_failure() -> None:
+        show_message(
+            "XmlToPdf nu mai poate urmări fereastra Edge dedicată. Serverul rămâne activ; "
+            "folosește system tray pentru a-l opri.",
+            "XmlToPdf",
+            MB_OK | MB_ICONWARNING,
+        )
+
+    def launch_browser(url: str) -> None:
+        nonlocal edge_session
+        if edge_opener is not None:
+            edge_opener(url)
+            return
+        if edge_session is None:
+            executable = find_edge_executable()
+            if executable is None:
+                raise EdgeSessionError("Microsoft Edge was not found.")
+            if controller is None:
+                raise EdgeSessionError("The XmlToPdf server is not ready.")
+            edge_session = make_edge_session(
+                executable=executable,
+                on_window_closed=controller.stop,
+                on_monitor_failure=report_edge_monitor_failure,
+            )
+        edge_session.open_or_activate(url)
 
     def schedule_web_shutdown(response: Any) -> bool:
         active_controller = controller_reference.get("controller")
@@ -451,7 +461,18 @@ def run_windowed_launcher(
                 MB_OK | MB_ICONERROR,
             )
         finally:
-            release_mutex(mutex)
+            try:
+                if edge_session is not None:
+                    edge_session.cleanup()
+            except Exception:
+                show_message(
+                    "Profilul temporar Edge nu a putut fi curățat în siguranță; "
+                    "va fi verificat la următoarea pornire XmlToPdf.",
+                    "XmlToPdf",
+                    MB_OK | MB_ICONWARNING,
+                )
+            finally:
+                release_mutex(mutex)
 
 
 def main() -> int:

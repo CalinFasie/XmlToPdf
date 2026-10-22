@@ -19,20 +19,22 @@ Specificația `XmlToPdf.spec` activează onefile și fereastra fără consolă, 
 
 ## Pornire și oprire
 
-La prima pornire, launcherul creează o singură instanță, activează ruta de oprire numai pentru această rulare, leagă serverul Werkzeug exclusiv la `127.0.0.1:5000`, așteaptă un răspuns HTTP local și apoi încearcă să deschidă pagina în Microsoft Edge. Pagina oferă butonul „Închide aplicația”; acesta cere confirmare și trimite un `POST` local protejat de verificările Host, Origin și CSRF. Serverul transmite răspunsul de confirmare înainte de a intra pe aceeași cale de oprire folosită de system tray. Oprirea eliberează portul, așteaptă threadurile HTTP active și elimină iconul. Dacă programarea opririi nu reușește, interfața afișează o eroare și comanda din tray rămâne disponibilă.
+La prima pornire, launcherul creează o singură instanță, activează ruta de oprire numai pentru această rulare, leagă serverul Werkzeug exclusiv la `127.0.0.1:5000`, așteaptă un răspuns HTTP local și pornește Microsoft Edge cu `--app=http://127.0.0.1:5000/`. Fereastra folosește un `--user-data-dir` temporar unic; profilul Edge obișnuit nu este folosit. Pagina oferă butonul „Închide aplicația”; acesta cere confirmare și trimite un `POST` local protejat de verificările Host, Origin și CSRF. Serverul transmite răspunsul de confirmare înainte de a intra pe aceeași cale de oprire folosită de system tray și monitorul ferestrei. Oprirea eliberează portul, așteaptă threadurile HTTP active și elimină iconul. Dacă programarea opririi nu reușește, interfața afișează o eroare și comanda din tray rămâne disponibilă.
 
 Iconul din zona de notificări oferă:
 
-- **Deschide XmlToPdf** — lansează Edge către pagina locală. Nu închide și nu controlează alte ferestre sau procese Edge.
+- **Deschide XmlToPdf** — activează fereastra Edge dedicată existentă sau încearcă să o pornească din nou dacă nu mai există. Nu închide și nu controlează alte ferestre sau procese Edge.
 - **Închide XmlToPdf** — apelează aceeași logică de oprire controlată ca butonul din pagina web.
 
-Închiderea Edge, închiderea filei, refresh-ul sau navigarea nu opresc serverul. Ruta HTTP de oprire nu este înregistrată de comanda de dezvoltare `python -m xmltopdf`, care se oprește cu `Ctrl+C`. Dacă Edge nu este disponibil, aplicația rămâne activă, iar un mesaj afișează URL-ul local pentru deschidere manuală. O a doua lansare a XmlToPdf este detectată prin mutex și îndrumă utilizatorul către iconul existent. Dacă portul 5000 este ocupat de un proces necunoscut, aplicația afișează o eroare și nu lansează Edge.
+Închiderea cu X a ferestrei Edge dedicate oprește XmlToPdf. Minimizarea, refresh-ul, navigarea și dialogul Print / Save as PDF nu opresc serverul; nici închiderea altor ferestre sau sesiuni Edge nu afectează aplicația. Ruta HTTP de oprire nu este înregistrată de comanda de dezvoltare `python -m xmltopdf`, care se oprește cu `Ctrl+C`. Dacă Edge nu pornește sau nu poate fi monitorizat, serverul rămâne activ, apare un mesaj de recuperare, iar tray-ul poate opri aplicația. O a doua lansare a XmlToPdf este detectată prin mutex și îndrumă utilizatorul către iconul existent. Dacă portul 5000 este ocupat de un proces necunoscut, aplicația afișează o eroare și nu lansează Edge.
 
 Aplicația nu pornește automat odată cu Windows și nu instalează servicii sau înregistrări în registry. Comanda de dezvoltare `python -m xmltopdf` rămâne disponibilă și pornește serverul local pentru oprire cu `Ctrl+C`.
 
 ## Securitate și confidențialitate
 
 Serverul rămâne pe loopback. Se păstrează verificările Host, Origin, CSRF și plafonul de 10 MiB; parserul XML securizat, șabloanele escapate și răspunsurile `no-store` rămân neschimbate. Nu se folosesc resurse externe. Jurnalizarea HTTP a launcherului nu include URL-uri de cereri, nume de fișiere sau date de factură. Erorile de pornire sunt prezentate prin mesaje Windows generice, fără traceback.
+
+Profilul temporar Edge este creat de launcher sub directorul temporar Windows și poartă un marker intern. Edge poate scrie acolo cache, cookie-uri, stare de sesiune, preferințe, date de descărcare/printare și rapoarte de diagnostic, în funcție de versiunea instalată. XmlToPdf nu salvează intenționat XML-urile încărcate ori PDF-uri în acel profil. Launcherul șterge doar directoarele cu markerul propriu după ce nu mai există procese Edge care le folosesc. Dacă utilizatorul oprește serverul din pagină sau tray cât timp fereastra Edge este deschisă, launcherul așteaptă scurt terminarea proceselor asociate; dacă ele rămân active, profilul nu este șters atunci. La o pornire ulterioară, profilurile marcate rămase sunt șterse numai când snapshot-ul proceselor nu găsește procese Edge; în caz de incertitudine, profilul este păstrat.
 
 ## Verificare și limite
 
@@ -58,3 +60,12 @@ Testele automatizate folosesc XML-uri sintetice și simulează Edge, system tray
 - `tools/build_windows.ps1`: build onefile reușit cu Python 3.13.14 și PyInstaller 6.22.3; `dist\XmlToPdf.exe` are 24.035.244 octeți, iar `dist/` conține numai acest executabil.
 - Testul de integrare folosește un port loopback efemer și date sintetice: răspunsul HTTP de oprire a fost citit integral, controllerul a încheiat serverul și a apelat oprirea iconului, iar portul a putut fi legat din nou.
 - Nu a fost posibilă verificarea manuală a butonului în Microsoft Edge, copierea și pornirea EXE-ului prin dublu-click sau interacțiunea cu iconul system tray. Aceste verificări rămân necesare înaintea distribuirii buildului nou.
+
+### Task 006D — verificări executate
+
+- `pytest`: 124 teste trecute, inclusiv scenarii sintetice pentru arborele de procese, identificarea HWND, minimizare/refresh/Print, închiderea ferestrei, pornire eșuată și oprire idempotentă.
+- `git diff --check`: fără erori.
+- `tools/build_windows.ps1`: build PyInstaller onefile reușit cu Python 3.13.14 și PyInstaller 6.22.3; `dist\XmlToPdf.exe` are 24.048.894 octeți.
+- Probe locale ale API-urilor Win32 de enumerare a proceselor și ferestrelor: apelurile au reușit.
+- Probă automatizată cu EXE-ul real și Microsoft Edge în sesiunea Windows: pagina locală a răspuns `200`, a fost găsită fereastra Edge vizibilă asociată arborelui de procese XmlToPdf, trimiterea `WM_CLOSE` către acel HWND a dus la ieșirea launcherului cu codul `0`, portul 5000 a putut fi legat din nou și profilul nou creat nu a rămas pe disc. Proba nu a încărcat o factură și nu a verificat vizual interfața sau imprimarea.
+- Interfața UI Microsoft Edge și system tray nu a fost disponibilă pentru control manual în Codex. Rămân neverificate vizual: încărcarea unui XML sintetic în fereastra Edge, Print / Save as PDF, minimizarea/refresh-ul prin UI, meniul tray și faptul că alte ferestre Edge rămân deschise. Acestea necesită validare manuală înainte de distribuție.
